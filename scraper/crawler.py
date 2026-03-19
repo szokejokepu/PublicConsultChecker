@@ -86,13 +86,14 @@ def crawl(
             summary["failed"] += 1
             article = None
 
-        if article and article.get("content"):
+        content = (article or {}).get("content") or ""
+        if len(content) >= 200:
             row_id = db.save_article(
                 url=article["url"],
                 title=article.get("title"),
                 author=article.get("author"),
                 date=article.get("date"),
-                content=article.get("content"),
+                content=content,
                 source_url=url,
             )
             if row_id is not None:

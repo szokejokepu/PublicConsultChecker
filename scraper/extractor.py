@@ -36,23 +36,26 @@ def extract_article(url: str, html: str | None = None) -> dict | None:
             raise RuntimeError(f"Failed to fetch {url}: {exc}") from exc
 
     # trafilatura is the primary extractor — it strips nav/ads/comments well
-    result = trafilatura.extract(
+    # bare_extraction() returns a dict with text, title, author, date, etc.
+    result = trafilatura.bare_extraction(
         html,
         url=url,
         include_comments=False,
         include_tables=False,
-        output_format="python",  # returns a dict
         with_metadata=True,
     )
 
-    if result and result.get("text"):
-        return {
-            "url": url,
-            "title": result.get("title"),
-            "author": result.get("author"),
-            "date": result.get("date"),
-            "content": result["text"],
-        }
+
+    if result:
+        result = result.as_dict()
+        if result["text"]:
+            return {
+                "url": url,
+                "title": result["title"],
+                "author": result["author"],
+                "date": result["date"],
+                "content": result["text"],
+            }
 
     # Fallback: grab text from <article> or <main> elements via BS4
     soup = BeautifulSoup(html, "lxml")
@@ -60,7 +63,7 @@ def extract_article(url: str, html: str | None = None) -> dict | None:
         node = soup.find(tag)
         if node:
             text = node.get_text(separator="\n", strip=True)
-            if len(text) > 200:
+            if len(text) > 100:
                 title_node = soup.find("title")
                 return {
                     "url": url,

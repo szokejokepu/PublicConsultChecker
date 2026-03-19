@@ -50,20 +50,24 @@ class ArticleDB:
 
     def __init__(self, db_path: str | Path = DB_DEFAULT) -> None:
         self.db_path = str(db_path)
+        # Keep one connection alive for the lifetime of this instance.
+        # This is required for :memory: databases — each new connect() call
+        # would produce a completely separate empty database.
+        self._connection = sqlite3.connect(self.db_path)
+        self._connection.row_factory = sqlite3.Row
         self._ensure_tables()
+
+    def close(self) -> None:
+        self._connection.close()
 
     @contextmanager
     def _conn(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
         try:
-            yield conn
-            conn.commit()
+            yield self._connection
+            self._connection.commit()
         except Exception:
-            conn.rollback()
+            self._connection.rollback()
             raise
-        finally:
-            conn.close()
 
     def _ensure_tables(self) -> None:
         with self._conn() as conn:
