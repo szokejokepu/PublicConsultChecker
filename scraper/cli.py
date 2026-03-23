@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from .crawler import crawl
+from .crawler import ARTICLE_LINK_SELECTOR, crawl_paginated
 from .database import Article, ArticleDB
 
 _DB_DEFAULT = str(Path(__file__).parent.parent / "articles.db")
@@ -43,15 +43,15 @@ def cli(ctx: click.Context, db: str) -> None:
 
 @cli.command()
 @click.argument("url")
-@click.option("--depth", default=1, show_default=True, help="Link-following depth (1 = seed page only).")
-@click.option("--all-domains", is_flag=True, help="Follow links to external domains.")
+@click.option("--selector", default=None, help="CSS selector for article links (overrides default).")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress per-article output.")
 @click.pass_context
-def scrape(ctx: click.Context, url: str, depth: int, all_domains: bool, quiet: bool) -> None:
-    """Crawl URL and save articles to the database."""
+def scrape(ctx: click.Context, url: str, selector: str | None, quiet: bool) -> None:
+    """Crawl a paginated listing at URL and save articles to the database."""
     db: ArticleDB = ctx.obj["db"]
-    click.echo(f"Crawling {url!r}  (depth={depth}, same_domain={not all_domains})")
-    summary = crawl(url, db, depth=depth, same_domain=not all_domains, verbose=not quiet)
+    used_selector = selector or ARTICLE_LINK_SELECTOR
+    click.echo(f"Crawling {url!r}  (selector={used_selector!r})")
+    summary = crawl_paginated(url, db, selector=used_selector, verbose=not quiet)
     click.echo(
         f"\nDone — saved: {summary['saved']}, "
         f"skipped/duplicates: {summary['skipped']}, "

@@ -1,116 +1,133 @@
-"""Link discovery and multi-page crawling."""
+"""Paginated listing crawler with CSS-selector-based article link discovery."""
 
 from __future__ import annotations
 
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import requests
 from bs4 import BeautifulSoup
 
 from .database import ArticleDB
-from .extractor import HEADERS, TIMEOUT, extract_article, fetch_html
+from .extractor import extract_article, fetch_html
+
+# CSS selector that locates article links on a listing page.
+ARTICLE_LINK_SELECTOR = ".comunicate_presa_right h2 a"
 
 
-def find_links(html: str, base_url: str, same_domain: bool = True) -> list[str]:
+def find_article_links(html: str, base_url: str, selector: str = ARTICLE_LINK_SELECTOR) -> list[str]:
     """
-    Return all href links found in *html*.
+    Return resolved URLs of article links found via *selector*.
 
-    When *same_domain* is True only links whose netloc matches *base_url* are
-    returned.  Fragment-only and mailto: links are always excluded.
+    The selector is expected to match one <a> element per article listing block.
+    Duplicate URLs are deduplicated while preserving order.
     """
     soup = BeautifulSoup(html, "lxml")
-    base_netloc = urlparse(base_url).netloc
     seen: set[str] = set()
     links: list[str] = []
 
-    for tag in soup.find_all("a", href=True):
-        href: str = tag["href"].strip()
+    for a in soup.select(selector):
+        href = (a.get("href") or "").strip()
         if not href or href.startswith(("#", "mailto:", "javascript:")):
             continue
         full = urljoin(base_url, href)
-        parsed = urlparse(full)
-        if parsed.scheme not in ("http", "https"):
-            continue
-        if same_domain and parsed.netloc != base_netloc:
-            continue
-        # Normalise: drop fragment
-        normalised = parsed._replace(fragment="").geturl()
-        if normalised not in seen:
-            seen.add(normalised)
-            links.append(normalised)
+        if full not in seen:
+            seen.add(full)
+            links.append(full)
 
     return links
 
 
-def crawl(
-    url: str,
+def page_url(base_url: str, page: int) -> str:
+    """
+    Build the URL for a given page number.
+
+    Page 1 → base_url unchanged.
+    Page 2 → base_url + "-page2"
+    Page N → base_url + "-pageN"
+    """
+    if page == 1:
+        return base_url
+    return f"{base_url}-page{page}"
+
+
+def crawl_paginated(
+    base_url: str,
     db: ArticleDB,
     *,
-    depth: int = 1,
-    same_domain: bool = True,
+    selector: str = ARTICLE_LINK_SELECTOR,
     verbose: bool = True,
 ) -> dict[str, int]:
     """
-    Crawl *url*, extract articles, and persist them in *db*.
+    Crawl a paginated listing and save every article found.
 
-    *depth* controls how many link-following hops to make (1 = seed page only,
-    2 = seed + pages linked from seed, …).
+    Iterates pages (base_url, base_url-page2, base_url-page3, …) until a page
+    returns no article links.  For each link found, the article is extracted
+    and persisted in *db*.
 
-    Returns a summary dict: {"saved": N, "skipped": N, "failed": N}.
+    Returns {"saved": N, "skipped": N, "failed": N}.
     """
     summary = {"saved": 0, "skipped": 0, "failed": 0}
-    visited: set[str] = set()
-    queue: list[tuple[str, int]] = [(url, 0)]  # (url, current_depth)
+    visited_articles: set[str] = set()
+    page = 1
 
-    while queue:
-        current_url, current_depth = queue.pop(0)
-        if current_url in visited:
-            continue
-        visited.add(current_url)
+    while True:
+        listing_url = page_url(base_url, page)
 
-        # --- fetch HTML (needed for both link discovery and extraction) ---
+        if verbose:
+            print(f"[page {page}] {listing_url}")
+
         try:
-            html = fetch_html(current_url)
+            listing_html = fetch_html(listing_url)
         except requests.RequestException as exc:
             if verbose:
-                print(f"  [fetch error] {current_url}: {exc}")
+                print(f"  [fetch error] {listing_url}: {exc}")
             summary["failed"] += 1
-            continue
+            break
 
-        # --- extract and save article from this page ---
-        try:
-            article = extract_article(current_url, html=html)
-        except Exception as exc:
+        article_links = find_article_links(listing_html, listing_url, selector=selector)
+
+        if not article_links:
             if verbose:
-                print(f"  [extract error] {current_url}: {exc}")
-            summary["failed"] += 1
-            article = None
+                print(f"  [no articles found — stopping]")
+            break
 
-        content = (article or {}).get("content") or ""
-        if len(content) >= 200:
+        for link in article_links:
+            if link in visited_articles:
+                summary["skipped"] += 1
+                continue
+            visited_articles.add(link)
+
+            try:
+                article_html = fetch_html(link)
+                article = extract_article(link, html=article_html)
+            except Exception as exc:
+                if verbose:
+                    print(f"  [extract error] {link}: {exc}")
+                summary["failed"] += 1
+                continue
+
+            content = (article or {}).get("content") or ""
+            if len(content) < 200:
+                summary["skipped"] += 1
+                continue
+
             row_id = db.save_article(
                 url=article["url"],
                 title=article.get("title"),
                 author=article.get("author"),
                 date=article.get("date"),
                 content=content,
-                source_url=url,
+                source_url=listing_url,
             )
             if row_id is not None:
                 summary["saved"] += 1
                 if verbose:
-                    print(f"  [saved #{row_id}] {article.get('title') or current_url}")
+                    print(f"  [saved #{row_id}] {article.get('title') or link}")
             else:
                 summary["skipped"] += 1
                 if verbose:
-                    print(f"  [duplicate]  {current_url}")
-        else:
-            summary["skipped"] += 1
+                    print(f"  [duplicate]  {link}")
 
-        # --- discover links for next depth level ---
-        if current_depth < depth - 1:
-            for link in find_links(html, current_url, same_domain=same_domain):
-                if link not in visited:
-                    queue.append((link, current_depth + 1))
+        page += 1
 
     return summary

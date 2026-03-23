@@ -1,34 +1,46 @@
 """Tests for scraper.crawler — HTTP and extraction are mocked."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
-from scraper.crawler import find_links, crawl
+from scraper.crawler import find_article_links, page_url, crawl_paginated
 from scraper.database import ArticleDB
 
-BASE_URL = "https://example.com"
+BASE_URL = "https://example.com/stiri"
 
-INDEX_HTML = """
+# A listing page with two article links in the expected structure
+LISTING_HTML = """
 <html><body>
-  <a href="/article/1">Article 1</a>
-  <a href="/article/2">Article 2</a>
-  <a href="https://other.com/page">External</a>
-  <a href="#section">Fragment</a>
-  <a href="mailto:a@b.com">Mail</a>
+  <div class="comunicate_presa_right">
+    <h2><a href="/article/1">First Article</a></h2>
+    <p>Some teaser text</p>
+  </div>
+  <div class="comunicate_presa_right">
+    <h2><a href="/article/2">Second Article</a></h2>
+    <p>Another teaser</p>
+  </div>
+  <nav><a href="/other">Unrelated link</a></nav>
 </body></html>
 """
 
+# A listing page with no article links (signals end of pagination)
+EMPTY_LISTING_HTML = "<html><body><p>No results.</p></body></html>"
+
 ARTICLE_HTML = """
 <html>
-<head><title>Sample Article</title></head>
+<head><title>{title}</title></head>
 <body>
   <article>
-    <h1>Sample Article</h1>
+    <h1>{title}</h1>
     <p>
-      This is a long enough article body to pass extraction thresholds.
-      It contains useful information about software engineering and testing
-      practices that are commonly used in modern Python development projects.
+      This article contains enough body text to pass the minimum content
+      length threshold. It discusses software engineering topics in depth,
+      covering testing strategies, code quality, and design principles that
+      are commonly applied in modern Python development projects. Good tests
+      are fast, isolated, and deterministic. They mock external dependencies
+      such as HTTP calls and databases so that the unit under test can be
+      verified without side effects or network access.
     </p>
   </article>
 </body>
@@ -36,91 +48,190 @@ ARTICLE_HTML = """
 """
 
 
-class TestFindLinks:
-    def test_finds_absolute_and_relative(self):
-        links = find_links(INDEX_HTML, BASE_URL)
-        assert "https://example.com/article/1" in links
-        assert "https://example.com/article/2" in links
+def make_article_html(title: str = "Test Article") -> str:
+    return ARTICLE_HTML.format(title=title)
 
-    def test_excludes_external_when_same_domain(self):
-        links = find_links(INDEX_HTML, BASE_URL, same_domain=True)
-        assert not any("other.com" in l for l in links)
 
-    def test_includes_external_when_requested(self):
-        links = find_links(INDEX_HTML, BASE_URL, same_domain=False)
-        assert any("other.com" in l for l in links)
+@pytest.fixture
+def db():
+    return ArticleDB(db_path=":memory:")
 
-    def test_excludes_fragments_and_mailto(self):
-        links = find_links(INDEX_HTML, BASE_URL, same_domain=False)
-        assert all(not l.startswith("#") for l in links)
-        assert all("mailto:" not in l for l in links)
+
+# ---------------------------------------------------------------------------
+# find_article_links
+# ---------------------------------------------------------------------------
+
+class TestFindArticleLinks:
+    def test_finds_links_in_selector(self):
+        links = find_article_links(LISTING_HTML, BASE_URL)
+        assert links == [
+            "https://example.com/article/1",
+            "https://example.com/article/2",
+        ]
+
+    def test_ignores_links_outside_selector(self):
+        links = find_article_links(LISTING_HTML, BASE_URL)
+        assert "https://example.com/other" not in links
+
+    def test_empty_page_returns_empty_list(self):
+        assert find_article_links(EMPTY_LISTING_HTML, BASE_URL) == []
+
+    def test_resolves_relative_urls(self):
+        html = '<html><body><div class="comunicate_presa_right"><h2><a href="/foo">X</a></h2></div></body></html>'
+        links = find_article_links(html, "https://example.com")
+        assert links == ["https://example.com/foo"]
 
     def test_deduplicates(self):
-        html = '<html><body><a href="/a">1</a><a href="/a">2</a></body></html>'
-        links = find_links(html, BASE_URL)
-        assert links.count(f"{BASE_URL}/a") == 1
+        html = """
+        <html><body>
+          <div class="comunicate_presa_right"><h2><a href="/a">A</a></h2></div>
+          <div class="comunicate_presa_right"><h2><a href="/a">A again</a></h2></div>
+        </body></html>
+        """
+        links = find_article_links(html, BASE_URL)
+        assert links.count("https://example.com/a") == 1
+
+    def test_custom_selector(self):
+        html = '<html><body><div class="news"><h3><a href="/n1">News</a></h3></div></body></html>'
+        links = find_article_links(html, BASE_URL, selector=".news h3 a")
+        assert links == ["https://example.com/n1"]
 
 
-class TestCrawl:
-    @pytest.fixture
-    def db(self):
-        return ArticleDB(db_path=":memory:")
+# ---------------------------------------------------------------------------
+# page_url
+# ---------------------------------------------------------------------------
 
-    def _make_fetch(self, html_by_url: dict[str, str]):
-        """Return a side_effect function that serves HTML by URL."""
+class TestPageUrl:
+    def test_page_1_is_base_url(self):
+        assert page_url("https://example.com/stiri", 1) == "https://example.com/stiri"
+
+    def test_page_2_appends_suffix(self):
+        assert page_url("https://example.com/stiri", 2) == "https://example.com/stiri-page2"
+
+    def test_page_10(self):
+        assert page_url("https://example.com/stiri", 10) == "https://example.com/stiri-page10"
+
+
+# ---------------------------------------------------------------------------
+# crawl_paginated
+# ---------------------------------------------------------------------------
+
+class TestCrawlPaginated:
+    def _mock_fetch(self, pages: dict[str, str]):
+        """Return a side_effect that serves HTML keyed by URL."""
         def fetch(url, timeout=None):
-            if url not in html_by_url:
-                raise Exception(f"Unexpected URL: {url}")
-            return html_by_url[url]
+            if url not in pages:
+                raise Exception(f"Unexpected URL fetched: {url}")
+            return pages[url]
         return fetch
 
-    def test_saves_article_from_seed(self, db):
-        with patch("scraper.crawler.fetch_html", return_value=ARTICLE_HTML):
-            summary = crawl(BASE_URL, db, depth=1, verbose=False)
+    def test_saves_articles_from_single_page(self, db):
+        pages = {
+            BASE_URL: LISTING_HTML,
+            "https://example.com/article/1": make_article_html("First Article"),
+            "https://example.com/article/2": make_article_html("Second Article"),
+        }
+        # Page 2 has no articles → stops pagination
+        pages[f"{BASE_URL}-page2"] = EMPTY_LISTING_HTML
 
-        assert summary["saved"] == 1
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
+
+        assert summary["saved"] == 2
         assert summary["failed"] == 0
-        assert db.get_stats()["total_articles"] == 1
+        assert db.get_stats()["total_articles"] == 2
 
-    def test_skips_duplicate_url(self, db):
-        with patch("scraper.crawler.fetch_html", return_value=ARTICLE_HTML):
-            crawl(BASE_URL, db, depth=1, verbose=False)
-            # Second crawl of same URL — article is a duplicate
-            summary = crawl(BASE_URL, db, depth=1, verbose=False)
+    def test_follows_multiple_pages(self, db):
+        pages = {
+            BASE_URL: LISTING_HTML,
+            "https://example.com/article/1": make_article_html("First"),
+            "https://example.com/article/2": make_article_html("Second"),
+            f"{BASE_URL}-page2": """
+                <html><body>
+                  <div class="comunicate_presa_right">
+                    <h2><a href="/article/3">Third Article</a></h2>
+                  </div>
+                </body></html>
+            """,
+            "https://example.com/article/3": make_article_html("Third"),
+            f"{BASE_URL}-page3": EMPTY_LISTING_HTML,
+        }
 
-        assert summary["skipped"] >= 1
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
 
-    def test_failed_fetch_counted(self, db):
+        assert summary["saved"] == 3
+
+    def test_stops_when_listing_has_no_links(self, db):
+        pages = {BASE_URL: EMPTY_LISTING_HTML}
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
+
+        assert summary["saved"] == 0
+        assert db.get_stats()["total_articles"] == 0
+
+    def test_failed_listing_fetch_stops_loop(self, db):
         import requests as req
         with patch(
             "scraper.crawler.fetch_html",
             side_effect=req.ConnectionError("down"),
         ):
-            summary = crawl(BASE_URL, db, depth=1, verbose=False)
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
 
         assert summary["failed"] == 1
         assert summary["saved"] == 0
 
-    def test_depth_one_does_not_follow_links(self, db):
-        html_map = {
-            BASE_URL: INDEX_HTML,
-            f"{BASE_URL}/article/1": ARTICLE_HTML,
-            f"{BASE_URL}/article/2": ARTICLE_HTML,
+    def test_failed_article_fetch_counted_separately(self, db):
+        import requests as req
+
+        call_count = {"n": 0}
+
+        def fetch(url, timeout=None):
+            call_count["n"] += 1
+            if url == BASE_URL:
+                return LISTING_HTML
+            if url == f"{BASE_URL}-page2":
+                return EMPTY_LISTING_HTML
+            raise req.ConnectionError("article unreachable")
+
+        with patch("scraper.crawler.fetch_html", side_effect=fetch):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
+
+        assert summary["failed"] == 2   # both article links failed
+        assert summary["saved"] == 0
+
+    def test_skips_duplicate_articles_across_pages(self, db):
+        # Article 1 appears on both page 1 and page 2
+        page2_html = """
+        <html><body>
+          <div class="comunicate_presa_right">
+            <h2><a href="/article/1">First Article (again)</a></h2>
+          </div>
+        </body></html>
+        """
+        pages = {
+            BASE_URL: '<html><body><div class="comunicate_presa_right"><h2><a href="/article/1">First</a></h2></div></body></html>',
+            "https://example.com/article/1": make_article_html("First"),
+            f"{BASE_URL}-page2": page2_html,
+            f"{BASE_URL}-page3": EMPTY_LISTING_HTML,
         }
-        with patch("scraper.crawler.fetch_html", side_effect=self._make_fetch(html_map)):
-            summary = crawl(BASE_URL, db, depth=1, verbose=False)
 
-        # depth=1 → only the seed URL is fetched; INDEX_HTML has no article body
-        assert summary["saved"] == 0  # index page has no extractable article
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
 
-    def test_depth_two_follows_links(self, db):
-        html_map = {
-            BASE_URL: INDEX_HTML,
-            f"{BASE_URL}/article/1": ARTICLE_HTML,
-            f"{BASE_URL}/article/2": ARTICLE_HTML,
+        assert summary["saved"] == 1
+        assert summary["skipped"] >= 1
+
+    def test_custom_selector(self, db):
+        html = '<html><body><div class="news"><h3><a href="/n1">News</a></h3></div></body></html>'
+        pages = {
+            BASE_URL: html,
+            "https://example.com/n1": make_article_html("News"),
+            f"{BASE_URL}-page2": EMPTY_LISTING_HTML,
         }
-        with patch("scraper.crawler.fetch_html", side_effect=self._make_fetch(html_map)):
-            summary = crawl(BASE_URL, db, depth=2, verbose=False)
 
-        # depth=2 → seed + linked pages
-        assert summary["saved"] == 2
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, selector=".news h3 a", verbose=False)
+
+        assert summary["saved"] == 1
