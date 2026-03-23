@@ -102,14 +102,20 @@ class TestFindArticleLinks:
 # ---------------------------------------------------------------------------
 
 class TestPageUrl:
-    def test_page_1_is_base_url(self):
-        assert page_url("https://example.com/stiri", 1) == "https://example.com/stiri"
+    def test_page_1_adds_trailing_slash(self):
+        assert page_url("https://example.com/stiri", 1) == "https://example.com/stiri/"
 
-    def test_page_2_appends_suffix(self):
-        assert page_url("https://example.com/stiri", 2) == "https://example.com/stiri-page2"
+    def test_page_1_preserves_existing_trailing_slash(self):
+        assert page_url("https://example.com/stiri/", 1) == "https://example.com/stiri/"
+
+    def test_page_2_appends_suffix_with_slash(self):
+        assert page_url("https://example.com/stiri", 2) == "https://example.com/stiri-page2/"
+
+    def test_page_2_strips_existing_slash_before_suffix(self):
+        assert page_url("https://example.com/stiri/", 2) == "https://example.com/stiri-page2/"
 
     def test_page_10(self):
-        assert page_url("https://example.com/stiri", 10) == "https://example.com/stiri-page10"
+        assert page_url("https://example.com/stiri", 10) == "https://example.com/stiri-page10/"
 
 
 # ---------------------------------------------------------------------------
@@ -127,12 +133,11 @@ class TestCrawlPaginated:
 
     def test_saves_articles_from_single_page(self, db):
         pages = {
-            BASE_URL: LISTING_HTML,
+            f"{BASE_URL}/": LISTING_HTML,
             "https://example.com/article/1": make_article_html("First Article"),
             "https://example.com/article/2": make_article_html("Second Article"),
+            f"{BASE_URL}-page2/": EMPTY_LISTING_HTML,
         }
-        # Page 2 has no articles → stops pagination
-        pages[f"{BASE_URL}-page2"] = EMPTY_LISTING_HTML
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
             summary = crawl_paginated(BASE_URL, db, verbose=False)
@@ -143,10 +148,10 @@ class TestCrawlPaginated:
 
     def test_follows_multiple_pages(self, db):
         pages = {
-            BASE_URL: LISTING_HTML,
+            f"{BASE_URL}/": LISTING_HTML,
             "https://example.com/article/1": make_article_html("First"),
             "https://example.com/article/2": make_article_html("Second"),
-            f"{BASE_URL}-page2": """
+            f"{BASE_URL}-page2/": """
                 <html><body>
                   <div class="comunicate_presa_right">
                     <h2><a href="/article/3">Third Article</a></h2>
@@ -154,7 +159,7 @@ class TestCrawlPaginated:
                 </body></html>
             """,
             "https://example.com/article/3": make_article_html("Third"),
-            f"{BASE_URL}-page3": EMPTY_LISTING_HTML,
+            f"{BASE_URL}-page3/": EMPTY_LISTING_HTML,
         }
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
@@ -165,10 +170,10 @@ class TestCrawlPaginated:
     def test_max_pages_limits_crawl(self, db):
         # 3 pages of content exist, but we cap at 2
         pages = {
-            BASE_URL: LISTING_HTML,
+            f"{BASE_URL}/": LISTING_HTML,
             "https://example.com/article/1": make_article_html("First"),
             "https://example.com/article/2": make_article_html("Second"),
-            f"{BASE_URL}-page2": """
+            f"{BASE_URL}-page2/": """
                 <html><body>
                   <div class="comunicate_presa_right">
                     <h2><a href="/article/3">Third Article</a></h2>
@@ -177,7 +182,7 @@ class TestCrawlPaginated:
             """,
             "https://example.com/article/3": make_article_html("Third"),
             # page 3 exists but must never be fetched
-            f"{BASE_URL}-page3": LISTING_HTML,
+            f"{BASE_URL}-page3/": LISTING_HTML,
         }
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
@@ -188,7 +193,7 @@ class TestCrawlPaginated:
 
     def test_max_pages_one_crawls_only_seed(self, db):
         pages = {
-            BASE_URL: LISTING_HTML,
+            f"{BASE_URL}/": LISTING_HTML,
             "https://example.com/article/1": make_article_html("First"),
             "https://example.com/article/2": make_article_html("Second"),
         }
@@ -200,7 +205,7 @@ class TestCrawlPaginated:
         assert db.get_stats()["total_articles"] == 2
 
     def test_stops_when_listing_has_no_links(self, db):
-        pages = {BASE_URL: EMPTY_LISTING_HTML}
+        pages = {f"{BASE_URL}/": EMPTY_LISTING_HTML}
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
             summary = crawl_paginated(BASE_URL, db, verbose=False)
@@ -226,9 +231,9 @@ class TestCrawlPaginated:
 
         def fetch(url, timeout=None):
             call_count["n"] += 1
-            if url == BASE_URL:
+            if url == f"{BASE_URL}/":
                 return LISTING_HTML
-            if url == f"{BASE_URL}-page2":
+            if url == f"{BASE_URL}-page2/":
                 return EMPTY_LISTING_HTML
             raise req.ConnectionError("article unreachable")
 
@@ -248,10 +253,10 @@ class TestCrawlPaginated:
         </body></html>
         """
         pages = {
-            BASE_URL: '<html><body><div class="comunicate_presa_right"><h2><a href="/article/1">First</a></h2></div></body></html>',
+            f"{BASE_URL}/": '<html><body><div class="comunicate_presa_right"><h2><a href="/article/1">First</a></h2></div></body></html>',
             "https://example.com/article/1": make_article_html("First"),
-            f"{BASE_URL}-page2": page2_html,
-            f"{BASE_URL}-page3": EMPTY_LISTING_HTML,
+            f"{BASE_URL}-page2/": page2_html,
+            f"{BASE_URL}-page3/": EMPTY_LISTING_HTML,
         }
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
@@ -263,12 +268,53 @@ class TestCrawlPaginated:
     def test_custom_selector(self, db):
         html = '<html><body><div class="news"><h3><a href="/n1">News</a></h3></div></body></html>'
         pages = {
-            BASE_URL: html,
+            f"{BASE_URL}/": html,
             "https://example.com/n1": make_article_html("News"),
-            f"{BASE_URL}-page2": EMPTY_LISTING_HTML,
+            f"{BASE_URL}-page2/": EMPTY_LISTING_HTML,
         }
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
             summary = crawl_paginated(BASE_URL, db, selector=".news h3 a", verbose=False)
 
         assert summary["saved"] == 1
+
+    def test_parallel_saves_all_articles(self, db):
+        # 6 articles on one page — fetched with max_workers=3
+        n = 6
+        listing = "".join(
+            f'<div class="comunicate_presa_right"><h2><a href="/article/{i}">Article {i}</a></h2></div>'
+            for i in range(1, n + 1)
+        )
+        pages = {f"{BASE_URL}/": f"<html><body>{listing}</body></html>"}
+        for i in range(1, n + 1):
+            pages[f"https://example.com/article/{i}"] = make_article_html(f"Article {i}")
+        pages[f"{BASE_URL}-page2/"] = EMPTY_LISTING_HTML
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, max_workers=3, verbose=False)
+
+        assert summary["saved"] == n
+        assert summary["failed"] == 0
+        assert db.get_stats()["total_articles"] == n
+
+    def test_parallel_same_result_as_sequential(self, db):
+        # Results with max_workers=1 and max_workers=4 must be identical
+        n = 4
+        listing = "".join(
+            f'<div class="comunicate_presa_right"><h2><a href="/article/{i}">Art {i}</a></h2></div>'
+            for i in range(1, n + 1)
+        )
+        pages = {f"{BASE_URL}/": f"<html><body>{listing}</body></html>"}
+        for i in range(1, n + 1):
+            pages[f"https://example.com/article/{i}"] = make_article_html(f"Art {i}")
+        pages[f"{BASE_URL}-page2/"] = EMPTY_LISTING_HTML
+
+        db_seq = ArticleDB(db_path=":memory:")
+        db_par = ArticleDB(db_path=":memory:")
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary_seq = crawl_paginated(BASE_URL, db_seq, max_workers=1, verbose=False)
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary_par = crawl_paginated(BASE_URL, db_par, max_workers=4, verbose=False)
+
+        assert summary_seq["saved"] == summary_par["saved"] == n

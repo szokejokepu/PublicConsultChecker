@@ -1,6 +1,7 @@
 """SQLite persistence layer for scraped articles."""
 
 import sqlite3
+import threading
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -53,8 +54,9 @@ class ArticleDB:
         # Keep one connection alive for the lifetime of this instance.
         # This is required for :memory: databases — each new connect() call
         # would produce a completely separate empty database.
-        self._connection = sqlite3.connect(self.db_path)
+        self._connection = sqlite3.connect(self.db_path, check_same_thread=False)
         self._connection.row_factory = sqlite3.Row
+        self._lock = threading.Lock()
         self._ensure_tables()
 
     def close(self) -> None:
@@ -62,12 +64,13 @@ class ArticleDB:
 
     @contextmanager
     def _conn(self):
-        try:
-            yield self._connection
-            self._connection.commit()
-        except Exception:
-            self._connection.rollback()
-            raise
+        with self._lock:
+            try:
+                yield self._connection
+                self._connection.commit()
+            except Exception:
+                self._connection.rollback()
+                raise
 
     def _ensure_tables(self) -> None:
         with self._conn() as conn:

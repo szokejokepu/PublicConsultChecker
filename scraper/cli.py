@@ -8,7 +8,7 @@ from pathlib import Path
 
 import click
 
-from .crawler import ARTICLE_LINK_SELECTOR, crawl_paginated
+from .crawler import ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS, crawl_paginated
 from .database import Article, ArticleDB
 
 _DB_DEFAULT = str(Path(__file__).parent.parent / "articles.db")
@@ -45,14 +45,15 @@ def cli(ctx: click.Context, db: str) -> None:
 @click.argument("url")
 @click.option("--selector", default=None, help="CSS selector for article links (overrides default).")
 @click.option("--max-pages", default=None, type=int, help="Stop after this many listing pages (default: unlimited).")
+@click.option("--workers", default=DEFAULT_WORKERS, show_default=True, type=int, help="Parallel article fetch threads.")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress per-article output.")
 @click.pass_context
-def scrape(ctx: click.Context, url: str, selector: str | None, max_pages: int | None, quiet: bool) -> None:
+def scrape(ctx: click.Context, url: str, selector: str | None, max_pages: int | None, workers: int, quiet: bool) -> None:
     """Crawl a paginated listing at URL and save articles to the database."""
     db: ArticleDB = ctx.obj["db"]
     used_selector = selector or ARTICLE_LINK_SELECTOR
-    click.echo(f"Crawling {url!r}  (selector={used_selector!r}, max_pages={max_pages or 'unlimited'})")
-    summary = crawl_paginated(url, db, selector=used_selector, max_pages=max_pages, verbose=not quiet)
+    click.echo(f"Crawling {url!r}  (selector={used_selector!r}, max_pages={max_pages or 'unlimited'}, workers={workers})")
+    summary = crawl_paginated(url, db, selector=used_selector, max_pages=max_pages, max_workers=workers, verbose=not quiet)
     click.echo(
         f"\nDone — saved: {summary['saved']}, "
         f"skipped/duplicates: {summary['skipped']}, "

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.parse import urljoin
 
 import requests
@@ -12,6 +13,7 @@ from .extractor import extract_article, fetch_html
 
 # CSS selector that locates article links on a listing page.
 ARTICLE_LINK_SELECTOR = ".comunicate_presa_right h2 a"
+DEFAULT_WORKERS = 8
 
 
 def find_article_links(html: str, base_url: str, selector: str = ARTICLE_LINK_SELECTOR) -> list[str]:
@@ -39,15 +41,36 @@ def find_article_links(html: str, base_url: str, selector: str = ARTICLE_LINK_SE
 
 def page_url(base_url: str, page: int) -> str:
     """
-    Build the URL for a given page number.
+    Build the URL for a given page number, always ending with /.
 
-    Page 1 → base_url unchanged.
-    Page 2 → base_url + "-page2"
-    Page N → base_url + "-pageN"
+    Page 1 → base_url/
+    Page 2 → base_url-page2/
+    Page N → base_url-pageN/
     """
+    base = base_url.rstrip("/")
     if page == 1:
-        return base_url
-    return f"{base_url}-page{page}"
+        return f"{base}/"
+    return f"{base}-page{page}/"
+
+
+def _fetch_and_extract(link: str, source_url: str) -> dict | None:
+    """
+    Fetch and extract a single article. Returns a result dict or None.
+    Raises on network / extraction errors so the caller can count failures.
+    """
+    article_html = fetch_html(link)
+    article = extract_article(link, html=article_html)
+    content = (article or {}).get("content") or ""
+    if len(content) < 200:
+        return None
+    return {
+        "url": article["url"],
+        "title": article.get("title"),
+        "author": article.get("author"),
+        "date": article.get("date"),
+        "content": content,
+        "source_url": source_url,
+    }
 
 
 def crawl_paginated(
@@ -56,14 +79,15 @@ def crawl_paginated(
     *,
     selector: str = ARTICLE_LINK_SELECTOR,
     max_pages: int | None = None,
+    max_workers: int = DEFAULT_WORKERS,
     verbose: bool = True,
 ) -> dict[str, int]:
     """
     Crawl a paginated listing and save every article found.
 
     Iterates pages (base_url, base_url-page2, base_url-page3, …) until a page
-    returns no article links or *max_pages* is reached.  For each link found,
-    the article is extracted and persisted in *db*.
+    returns no article links or *max_pages* is reached.  Articles on each page
+    are fetched in parallel using *max_workers* threads.
 
     Returns {"saved": N, "skipped": N, "failed": N}.
     """
@@ -89,45 +113,42 @@ def crawl_paginated(
 
         if not article_links:
             if verbose:
-                print(f"  [no articles found — stopping]")
+                print("  [no articles found — stopping]")
             break
 
-        for link in article_links:
-            if link in visited_articles:
-                summary["skipped"] += 1
-                continue
-            visited_articles.add(link)
+        # Filter out already-visited links before submitting to the pool
+        new_links = [l for l in article_links if l not in visited_articles]
+        summary["skipped"] += len(article_links) - len(new_links)
+        visited_articles.update(new_links)
 
-            try:
-                article_html = fetch_html(link)
-                article = extract_article(link, html=article_html)
-            except Exception as exc:
-                if verbose:
-                    print(f"  [extract error] {link}: {exc}")
-                summary["failed"] += 1
-                continue
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = {
+                pool.submit(_fetch_and_extract, link, listing_url): link
+                for link in new_links
+            }
+            for future in as_completed(futures):
+                link = futures[future]
+                try:
+                    result = future.result()
+                except Exception as exc:
+                    if verbose:
+                        print(f"  [error] {link}: {exc}")
+                    summary["failed"] += 1
+                    continue
 
-            content = (article or {}).get("content") or ""
-            if len(content) < 200:
-                summary["skipped"] += 1
-                continue
+                if result is None:
+                    summary["skipped"] += 1
+                    continue
 
-            row_id = db.save_article(
-                url=article["url"],
-                title=article.get("title"),
-                author=article.get("author"),
-                date=article.get("date"),
-                content=content,
-                source_url=listing_url,
-            )
-            if row_id is not None:
-                summary["saved"] += 1
-                if verbose:
-                    print(f"  [saved #{row_id}] {article.get('title') or link}")
-            else:
-                summary["skipped"] += 1
-                if verbose:
-                    print(f"  [duplicate]  {link}")
+                row_id = db.save_article(**result)
+                if row_id is not None:
+                    summary["saved"] += 1
+                    if verbose:
+                        print(f"  [saved #{row_id}] {result['title'] or link}")
+                else:
+                    summary["skipped"] += 1
+                    if verbose:
+                        print(f"  [duplicate]  {link}")
 
         page += 1
 
