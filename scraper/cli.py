@@ -44,14 +44,15 @@ def cli(ctx: click.Context, db: str) -> None:
 @cli.command()
 @click.argument("url")
 @click.option("--selector", default=None, help="CSS selector for article links (overrides default).")
+@click.option("--max-pages", default=None, type=int, help="Stop after this many listing pages (default: unlimited).")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress per-article output.")
 @click.pass_context
-def scrape(ctx: click.Context, url: str, selector: str | None, quiet: bool) -> None:
+def scrape(ctx: click.Context, url: str, selector: str | None, max_pages: int | None, quiet: bool) -> None:
     """Crawl a paginated listing at URL and save articles to the database."""
     db: ArticleDB = ctx.obj["db"]
     used_selector = selector or ARTICLE_LINK_SELECTOR
-    click.echo(f"Crawling {url!r}  (selector={used_selector!r})")
-    summary = crawl_paginated(url, db, selector=used_selector, verbose=not quiet)
+    click.echo(f"Crawling {url!r}  (selector={used_selector!r}, max_pages={max_pages or 'unlimited'})")
+    summary = crawl_paginated(url, db, selector=used_selector, max_pages=max_pages, verbose=not quiet)
     click.echo(
         f"\nDone — saved: {summary['saved']}, "
         f"skipped/duplicates: {summary['skipped']}, "

@@ -162,6 +162,43 @@ class TestCrawlPaginated:
 
         assert summary["saved"] == 3
 
+    def test_max_pages_limits_crawl(self, db):
+        # 3 pages of content exist, but we cap at 2
+        pages = {
+            BASE_URL: LISTING_HTML,
+            "https://example.com/article/1": make_article_html("First"),
+            "https://example.com/article/2": make_article_html("Second"),
+            f"{BASE_URL}-page2": """
+                <html><body>
+                  <div class="comunicate_presa_right">
+                    <h2><a href="/article/3">Third Article</a></h2>
+                  </div>
+                </body></html>
+            """,
+            "https://example.com/article/3": make_article_html("Third"),
+            # page 3 exists but must never be fetched
+            f"{BASE_URL}-page3": LISTING_HTML,
+        }
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, max_pages=2, verbose=False)
+
+        assert summary["saved"] == 3   # pages 1 & 2 fully crawled
+        assert db.get_stats()["total_articles"] == 3
+
+    def test_max_pages_one_crawls_only_seed(self, db):
+        pages = {
+            BASE_URL: LISTING_HTML,
+            "https://example.com/article/1": make_article_html("First"),
+            "https://example.com/article/2": make_article_html("Second"),
+        }
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, max_pages=1, verbose=False)
+
+        assert summary["saved"] == 2
+        assert db.get_stats()["total_articles"] == 2
+
     def test_stops_when_listing_has_no_links(self, db):
         pages = {BASE_URL: EMPTY_LISTING_HTML}
 

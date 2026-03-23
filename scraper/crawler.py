@@ -55,14 +55,15 @@ def crawl_paginated(
     db: ArticleDB,
     *,
     selector: str = ARTICLE_LINK_SELECTOR,
+    max_pages: int | None = None,
     verbose: bool = True,
 ) -> dict[str, int]:
     """
     Crawl a paginated listing and save every article found.
 
     Iterates pages (base_url, base_url-page2, base_url-page3, …) until a page
-    returns no article links.  For each link found, the article is extracted
-    and persisted in *db*.
+    returns no article links or *max_pages* is reached.  For each link found,
+    the article is extracted and persisted in *db*.
 
     Returns {"saved": N, "skipped": N, "failed": N}.
     """
@@ -70,7 +71,7 @@ def crawl_paginated(
     visited_articles: set[str] = set()
     page = 1
 
-    while True:
+    while max_pages is None or page <= max_pages:
         listing_url = page_url(base_url, page)
 
         if verbose:
