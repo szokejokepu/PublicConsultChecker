@@ -265,6 +265,27 @@ class TestCrawlPaginated:
         assert summary["saved"] == 1
         assert summary["skipped"] >= 1
 
+    def test_skips_url_already_in_db_without_fetching(self, db):
+        # Pre-populate the DB with article/1
+        db.save_article(
+            url="https://example.com/article/1",
+            title="Pre-existing",
+            content="x" * 300,
+        )
+        pages = {
+            f"{BASE_URL}/": LISTING_HTML,   # lists article/1 and article/2
+            "https://example.com/article/2": make_article_html("Second Article"),
+            f"{BASE_URL}-page2/": EMPTY_LISTING_HTML,
+            # article/1 is intentionally absent — fetching it would raise
+        }
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(BASE_URL, db, verbose=False)
+
+        assert summary["saved"] == 1       # only article/2 saved
+        assert summary["skipped"] >= 1     # article/1 skipped via url_exists
+        assert db.get_stats()["total_articles"] == 2
+
     def test_custom_selector(self, db):
         html = '<html><body><div class="news"><h3><a href="/n1">News</a></h3></div></body></html>'
         pages = {

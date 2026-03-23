@@ -53,6 +53,19 @@ class TestGetArticle:
         assert db.get_article(9999) is None
 
 
+class TestUrlExists:
+    def test_returns_false_for_unknown_url(self, db):
+        assert db.url_exists("https://example.com/missing") is False
+
+    def test_returns_true_after_save(self, db):
+        _save(db, url="https://example.com/article")
+        assert db.url_exists("https://example.com/article") is True
+
+    def test_different_url_not_found(self, db):
+        _save(db, url="https://example.com/a")
+        assert db.url_exists("https://example.com/b") is False
+
+
 class TestListArticles:
     def test_empty_db(self, db):
         assert db.list_articles() == []

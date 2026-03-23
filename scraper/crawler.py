@@ -116,8 +116,11 @@ def crawl_paginated(
                 print("  [no articles found — stopping]")
             break
 
-        # Filter out already-visited links before submitting to the pool
-        new_links = [l for l in article_links if l not in visited_articles]
+        # Filter out links seen this run or already stored in the DB
+        new_links = [
+            l for l in article_links
+            if l not in visited_articles and not db.url_exists(l)
+        ]
         summary["skipped"] += len(article_links) - len(new_links)
         visited_articles.update(new_links)
 

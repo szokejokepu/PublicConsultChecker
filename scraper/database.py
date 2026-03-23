@@ -122,6 +122,13 @@ class ArticleDB:
     # Read
     # ------------------------------------------------------------------
 
+    def url_exists(self, url: str) -> bool:
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM articles WHERE url = ? LIMIT 1", (url,)
+            ).fetchone()
+        return row is not None
+
     def get_article(self, article_id: int) -> Article | None:
         with self._conn() as conn:
             row = conn.execute(
