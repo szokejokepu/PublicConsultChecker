@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import json5
+import json
 import sys
 import textwrap
 from pathlib import Path
 
 import click
 
-from .crawler import ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS, crawl_paginated
+from .config import ScrapeConfig, DEFAULT_ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS
+from .crawler import crawl_paginated
 from .database import Article, ArticleDB
 
 _DB_DEFAULT = str(Path(__file__).parent.parent / "articles.db")
@@ -41,19 +44,57 @@ def cli(ctx: click.Context, db: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _load_config(path: str) -> ScrapeConfig:
+    try:
+        with open(path) as f:
+            data = json5.load(f)
+    except json.JSONDecodeError as exc:
+        raise click.BadParameter(f"Invalid JSON in config file: {exc}", param_hint="--config")
+    except ValueError as exc:
+        raise click.BadParameter(f"Invalid JSON in config file: {exc}", param_hint="--config")
+    if not isinstance(data, dict):
+        raise click.BadParameter("Config file must be a JSON object.", param_hint="--config")
+    try:
+        return ScrapeConfig.from_dict(data)
+    except ValueError as exc:
+        raise click.BadParameter(str(exc), param_hint="--config")
+
+
 @cli.command()
-@click.argument("url")
-@click.option("--selector", default=None, help="CSS selector for article links (overrides default).")
+@click.argument("url", required=False, default="")
+@click.option("--config", "-c", type=click.Path(exists=True, dir_okay=False), default=None, help="JSON config file.")
+@click.option("--selector", default=None, help="CSS selector for article links.")
 @click.option("--max-pages", default=None, type=int, help="Stop after this many listing pages (default: unlimited).")
-@click.option("--workers", default=DEFAULT_WORKERS, show_default=True, type=int, help="Parallel article fetch threads.")
+@click.option("--workers", default=None, type=int, help=f"Parallel article fetch threads (default: {DEFAULT_WORKERS}).")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress per-article output.")
 @click.pass_context
-def scrape(ctx: click.Context, url: str, selector: str | None, max_pages: int | None, workers: int, quiet: bool) -> None:
-    """Crawl a paginated listing at URL and save articles to the database."""
+def scrape(
+    ctx: click.Context,
+    url: str,
+    config: str | None,
+    selector: str | None,
+    max_pages: int | None,
+    workers: int | None,
+    quiet: bool,
+) -> None:
+    """Crawl a paginated listing and save articles to the database.
+
+    URL may be passed as an argument or via a --config file.
+    CLI options always override values from the config file.
+    """
+    cfg = _load_config(config) if config else ScrapeConfig(url)
+
+    # Merge: CLI value wins, then config file, then hardcoded default
+    url = url or cfg.url
+    if not url:
+        raise click.UsageError("A URL is required (as an argument or via 'url' in --config).")
+    selector = selector or cfg.selector or DEFAULT_ARTICLE_LINK_SELECTOR
+    max_pages = max_pages if max_pages is not None else cfg.max_pages
+    workers = workers if workers is not None else (cfg.workers if cfg.workers is not None else DEFAULT_WORKERS)
+
     db: ArticleDB = ctx.obj["db"]
-    used_selector = selector or ARTICLE_LINK_SELECTOR
-    click.echo(f"Crawling {url!r}  (selector={used_selector!r}, max_pages={max_pages or 'unlimited'}, workers={workers})")
-    summary = crawl_paginated(url, db, selector=used_selector, max_pages=max_pages, max_workers=workers, verbose=not quiet)
+    click.echo(f"Crawling {url!r}  (selector={selector!r}, max_pages={max_pages or 'unlimited'}, workers={workers})")
+    summary = crawl_paginated(url, db, selector=selector, max_pages=max_pages, max_workers=workers, verbose=not quiet)
     click.echo(
         f"\nDone — saved: {summary['saved']}, "
         f"skipped/duplicates: {summary['skipped']}, "

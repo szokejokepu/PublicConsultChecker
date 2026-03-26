@@ -8,15 +8,14 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
+from .config import DEFAULT_ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS
 from .database import ArticleDB
 from .extractor import extract_article, fetch_html
 
 # CSS selector that locates article links on a listing page.
-ARTICLE_LINK_SELECTOR = ".comunicate_presa_right h2 a"
-DEFAULT_WORKERS = 8
 
 
-def find_article_links(html: str, base_url: str, selector: str = ARTICLE_LINK_SELECTOR) -> list[str]:
+def find_article_links(html: str, base_url: str, selector: str = DEFAULT_ARTICLE_LINK_SELECTOR) -> list[str]:
     """
     Return resolved URLs of article links found via *selector*.
 
@@ -77,7 +76,7 @@ def crawl_paginated(
     base_url: str,
     db: ArticleDB,
     *,
-    selector: str = ARTICLE_LINK_SELECTOR,
+    selector: str = DEFAULT_ARTICLE_LINK_SELECTOR,
     max_pages: int | None = None,
     max_workers: int = DEFAULT_WORKERS,
     verbose: bool = True,
