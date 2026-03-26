@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article Scraper</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f5f5f5;
+      color: #222;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1a1a2e;
+      color: #fff;
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.5px; }
+    .stats { display: flex; gap: 1.5rem; font-size: 0.85rem; color: #aab; }
+    .stat span { font-weight: 700; color: #7eb8f7; }
+
+    /* ── Layout ── */
+    .layout {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      flex: 1;
+      overflow: hidden;
+    }
+
+    /* ── Article list ── */
+    .sidebar {
+      background: #fff;
+      border-right: 1px solid #e0e0e0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .sidebar-toolbar {
+      padding: 0.75rem;
+      border-bottom: 1px solid #e8e8e8;
+      display: flex;
+      gap: 0.5rem;
+    }
+    .sidebar-toolbar input {
+      flex: 1;
+      padding: 0.45rem 0.7rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.85rem;
+    }
+    .sidebar-toolbar button {
+      padding: 0.45rem 0.9rem;
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .sidebar-toolbar button:hover { background: #2d2d50; }
+
+    #article-list {
+      overflow-y: auto;
+      flex: 1;
+    }
+    .article-item {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid #f0f0f0;
+      cursor: pointer;
+      transition: background 0.1s;
+    }
+    .article-item:hover { background: #f7f9fc; }
+    .article-item.active { background: #edf4ff; border-left: 3px solid #3b82f6; }
+    .article-item .title {
+      font-size: 0.9rem;
+      font-weight: 500;
+      color: #1a1a2e;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .article-item .meta {
+      font-size: 0.75rem;
+      color: #888;
+      margin-top: 0.2rem;
+      display: flex;
+      gap: 0.75rem;
+    }
+    .load-more {
+      padding: 0.75rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: #3b82f6;
+      cursor: pointer;
+      border-top: 1px solid #eee;
+    }
+    .load-more:hover { background: #f7f9fc; }
+    .empty { padding: 2rem; text-align: center; color: #aaa; font-size: 0.9rem; }
+
+    /* ── Main panel ── */
+    main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .main-tabs {
+      display: flex;
+      border-bottom: 1px solid #e0e0e0;
+      background: #fff;
+      flex-shrink: 0;
+    }
+    .tab {
+      padding: 0.75rem 1.25rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: #555;
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .tab.active { color: #3b82f6; border-bottom-color: #3b82f6; font-weight: 500; }
+    .tab:hover { color: #3b82f6; }
+
+    .panel { display: none; flex: 1; overflow-y: auto; padding: 1.5rem; }
+    .panel.active { display: flex; flex-direction: column; gap: 1rem; }
+
+    /* ── Article detail ── */
+    #detail-placeholder { color: #aaa; margin: auto; text-align: center; font-size: 0.95rem; }
+    .detail-header h2 { font-size: 1.3rem; color: #1a1a2e; line-height: 1.4; }
+    .detail-meta { display: flex; flex-wrap: wrap; gap: 1rem; font-size: 0.8rem; color: #666; }
+    .detail-meta a { color: #3b82f6; word-break: break-all; }
+    .detail-content {
+      font-size: 0.92rem;
+      line-height: 1.7;
+      color: #333;
+      white-space: pre-wrap;
+      background: #fafafa;
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid #eee;
+    }
+    .detail-actions { display: flex; gap: 0.5rem; }
+    .btn-danger {
+      padding: 0.4rem 0.9rem;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .btn-danger:hover { background: #dc2626; }
+
+    /* ── Scrape form ── */
+    .scrape-form {
+      background: #fff;
+      border: 1px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 1.5rem;
+      max-width: 620px;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .scrape-form h3 { font-size: 1rem; color: #1a1a2e; margin-bottom: 0.25rem; }
+    .form-row { display: flex; flex-direction: column; gap: 0.3rem; }
+    .form-row label { font-size: 0.8rem; font-weight: 500; color: #555; }
+    .form-row input {
+      padding: 0.5rem 0.75rem;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .form-row input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px #dbeafe; }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .btn-primary {
+      padding: 0.6rem 1.2rem;
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-weight: 500;
+      align-self: flex-start;
+    }
+    .btn-primary:hover { background: #2563eb; }
+    .btn-primary:disabled { background: #93c5fd; cursor: not-allowed; }
+
+    /* ── Job status ── */
+    .job-status {
+      background: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+      font-size: 0.875rem;
+      display: none;
+    }
+    .job-status.visible { display: block; }
+    .job-status .job-id { color: #888; font-size: 0.75rem; margin-bottom: 0.4rem; }
+    .job-status .status-line { display: flex; align-items: center; gap: 0.5rem; font-weight: 500; }
+    .badge {
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-pending  { background: #fef3c7; color: #92400e; }
+    .badge-running  { background: #dbeafe; color: #1e40af; }
+    .badge-done     { background: #d1fae5; color: #065f46; }
+    .badge-failed   { background: #fee2e2; color: #991b1b; }
+    .job-summary { margin-top: 0.5rem; color: #555; }
+    .job-error { margin-top: 0.5rem; color: #dc2626; }
+
+    /* ── Spinner ── */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #bfdbfe;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Article Scraper</h1>
+  <div class="stats" id="stats">
+    <div>Articles: <span id="stat-total">—</span></div>
+    <div>Sources: <span id="stat-sources">—</span></div>
+    <div>Last scraped: <span id="stat-last">—</span></div>
+  </div>
+</header>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <aside class="sidebar">
+    <div class="sidebar-toolbar">
+      <input id="search-input" type="text" placeholder="Search articles…" />
+      <button onclick="doSearch()">Search</button>
+    </div>
+    <div id="article-list"></div>
+    <div class="load-more" id="load-more" style="display:none" onclick="loadMore()">Load more</div>
+  </aside>
+
+  <!-- ── Main ── -->
+  <main>
+    <nav class="main-tabs">
+      <div class="tab active" onclick="switchTab('detail')">Article</div>
+      <div class="tab" onclick="switchTab('scrape')">Scrape</div>
+    </nav>
+
+    <!-- Detail panel -->
+    <div class="panel active" id="panel-detail">
+      <div id="detail-placeholder">Select an article from the list</div>
+      <div id="detail-content" style="display:none; flex-direction:column; gap:1rem;">
+        <div class="detail-header"><h2 id="d-title"></h2></div>
+        <div class="detail-meta">
+          <span id="d-author"></span>
+          <span id="d-date"></span>
+          <a id="d-url" target="_blank"></a>
+        </div>
+        <div class="detail-actions">
+          <button class="btn-danger" onclick="deleteArticle()">Delete</button>
+        </div>
+        <div class="detail-content" id="d-body"></div>
+      </div>
+    </div>
+
+    <!-- Scrape panel -->
+    <div class="panel" id="panel-scrape">
+      <form class="scrape-form" onsubmit="submitScrape(event)">
+        <h3>Start a new scrape</h3>
+        <div class="form-row">
+          <label>URL *</label>
+          <input id="f-url" type="url" placeholder="https://example.com/stiri" required />
+        </div>
+        <div class="form-row">
+          <label>Article selector</label>
+          <input id="f-selector" type="text" placeholder=".comunicate_presa_right h2 a" />
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Max pages (blank = unlimited)</label>
+            <input id="f-max-pages" type="number" min="1" placeholder="unlimited" />
+          </div>
+          <div class="form-row">
+            <label>Workers</label>
+            <input id="f-workers" type="number" min="1" max="32" value="8" />
+          </div>
+        </div>
+        <button class="btn-primary" type="submit" id="scrape-btn">Start scrape</button>
+      </form>
+
+      <div class="job-status" id="job-status">
+        <div class="job-id" id="job-id-label"></div>
+        <div class="status-line">
+          <span id="job-badge" class="badge"></span>
+          <span id="job-status-text"></span>
+          <span id="job-spinner" class="spinner" style="display:none"></span>
+        </div>
+        <div class="job-summary" id="job-summary"></div>
+        <div class="job-error" id="job-error"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const API = '';
+  let offset = 0;
+  const PAGE = 50;
+  let currentSearch = '';
+  let currentArticleId = null;
+  let pollInterval = null;
+
+  // ── Init ──────────────────────────────────────────────────────────────────
+
+  async function init() {
+    await Promise.all([loadStats(), loadArticles(true)]);
+  }
+
+  // ── Stats ─────────────────────────────────────────────────────────────────
+
+  async function loadStats() {
+    const s = await fetchJSON('/api/stats');
+    document.getElementById('stat-total').textContent = s.total_articles;
+    document.getElementById('stat-sources').textContent = s.unique_sources;
+    document.getElementById('stat-last').textContent = s.newest_scraped_at
+      ? s.newest_scraped_at.slice(0, 16).replace('T', ' ')
+      : 'never';
+  }
+
+  // ── Article list ──────────────────────────────────────────────────────────
+
+  async function loadArticles(reset = false) {
+    if (reset) { offset = 0; document.getElementById('article-list').innerHTML = ''; }
+    const params = new URLSearchParams({ limit: PAGE, offset });
+    if (currentSearch) params.set('search', currentSearch);
+    const data = await fetchJSON(`/api/articles?${params}`);
+    renderArticles(data.articles, reset);
+    offset += data.articles.length;
+    const loadMore = document.getElementById('load-more');
+    loadMore.style.display = (!currentSearch && offset < data.total) ? 'block' : 'none';
+  }
+
+  function renderArticles(articles, reset) {
+    const list = document.getElementById('article-list');
+    if (reset && articles.length === 0) {
+      list.innerHTML = '<div class="empty">No articles found.</div>';
+      return;
+    }
+    articles.forEach(a => {
+      const el = document.createElement('div');
+      el.className = 'article-item' + (a.id === currentArticleId ? ' active' : '');
+      el.dataset.id = a.id;
+      el.innerHTML = `
+        <div class="title">${esc(a.title || a.url)}</div>
+        <div class="meta">
+          <span>${esc(a.date || '')}</span>
+          <span>${esc(a.author || '')}</span>
+        </div>`;
+      el.onclick = () => openArticle(a.id, el);
+      list.appendChild(el);
+    });
+  }
+
+  function loadMore() { loadArticles(false); }
+
+  function doSearch() {
+    currentSearch = document.getElementById('search-input').value.trim();
+    loadArticles(true);
+  }
+
+  document.getElementById('search-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doSearch();
+  });
+
+  // ── Article detail ────────────────────────────────────────────────────────
+
+  async function openArticle(id, el) {
+    currentArticleId = id;
+    document.querySelectorAll('.article-item').forEach(i => i.classList.remove('active'));
+    el.classList.add('active');
+    switchTab('detail');
+    const a = await fetchJSON(`/api/articles/${id}`);
+    document.getElementById('detail-placeholder').style.display = 'none';
+    const dc = document.getElementById('detail-content');
+    dc.style.display = 'flex';
+    document.getElementById('d-title').textContent = a.title || '(no title)';
+    document.getElementById('d-author').textContent = a.author ? `By ${a.author}` : '';
+    document.getElementById('d-date').textContent = a.date || '';
+    const urlEl = document.getElementById('d-url');
+    urlEl.href = a.url; urlEl.textContent = a.url;
+    document.getElementById('d-body').textContent = a.content || '(no content)';
+  }
+
+  async function deleteArticle() {
+    if (!currentArticleId) return;
+    if (!confirm('Delete this article?')) return;
+    await fetchJSON(`/api/articles/${currentArticleId}`, { method: 'DELETE' });
+    currentArticleId = null;
+    document.getElementById('detail-content').style.display = 'none';
+    document.getElementById('detail-placeholder').style.display = '';
+    await Promise.all([loadStats(), loadArticles(true)]);
+  }
+
+  // ── Scrape ────────────────────────────────────────────────────────────────
+
+  async function submitScrape(e) {
+    e.preventDefault();
+    const body = {
+      url: document.getElementById('f-url').value,
+      selector: document.getElementById('f-selector').value || undefined,
+      workers: parseInt(document.getElementById('f-workers').value) || 8,
+    };
+    const mp = document.getElementById('f-max-pages').value;
+    if (mp) body.max_pages = parseInt(mp);
+
+    document.getElementById('scrape-btn').disabled = true;
+    const job = await fetchJSON('/api/scrape', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    startPolling(job.job_id);
+  }
+
+  function startPolling(jobId) {
+    if (pollInterval) clearInterval(pollInterval);
+    showJobStatus(jobId, 'pending', null, null);
+    pollInterval = setInterval(async () => {
+      const job = await fetchJSON(`/api/scrape/${jobId}`);
+      showJobStatus(job.job_id, job.status, job.summary, job.error);
+      if (job.status === 'done' || job.status === 'failed') {
+        clearInterval(pollInterval);
+        pollInterval = null;
+        document.getElementById('scrape-btn').disabled = false;
+        if (job.status === 'done') { loadStats(); loadArticles(true); }
+      }
+    }, 1500);
+  }
+
+  function showJobStatus(id, status, summary, error) {
+    const box = document.getElementById('job-status');
+    box.className = 'job-status visible';
+    document.getElementById('job-id-label').textContent = `Job: ${id}`;
+    const badge = document.getElementById('job-badge');
+    badge.className = `badge badge-${status}`;
+    badge.textContent = status;
+    document.getElementById('job-status-text').textContent = {
+      pending: 'Waiting to start…',
+      running: 'Crawling in progress…',
+      done: 'Completed.',
+      failed: 'Failed.',
+    }[status] || status;
+    document.getElementById('job-spinner').style.display =
+      (status === 'running' || status === 'pending') ? 'inline-block' : 'none';
+    document.getElementById('job-summary').textContent = summary && Object.keys(summary).length
+      ? `Saved: ${summary.saved}  Skipped: ${summary.skipped}  Failed: ${summary.failed}`
+      : '';
+    document.getElementById('job-error').textContent = error || '';
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
+
+  function switchTab(name) {
+    document.querySelectorAll('.tab').forEach((t, i) => {
+      const names = ['detail', 'scrape'];
+      t.classList.toggle('active', names[i] === name);
+    });
+    document.querySelectorAll('.panel').forEach(p => {
+      p.classList.toggle('active', p.id === `panel-${name}`);
+    });
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  async function fetchJSON(url, opts = {}) {
+    const r = await fetch(url, opts);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    if (r.status === 204) return null;
+    return r.json();
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  init();
+</script>
+</body>
+</html>
