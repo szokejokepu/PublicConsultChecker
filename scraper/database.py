@@ -1,5 +1,8 @@
 """SQLite persistence layer for scraped articles."""
 
+from __future__ import annotations
+
+import json
 import sqlite3
 import threading
 from contextlib import contextmanager
@@ -31,6 +34,22 @@ USING fts5(title, content, author, content='articles', content_rowid='id')
 POPULATE_FTS = """
 INSERT OR REPLACE INTO articles_fts(rowid, title, content, author)
 SELECT id, title, content, author FROM articles WHERE id = ?
+"""
+
+CREATE_ANALYSIS_TABLE = """
+CREATE TABLE IF NOT EXISTS article_analysis (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    article_id              INTEGER NOT NULL UNIQUE REFERENCES articles(id) ON DELETE CASCADE,
+    keyword_matched         INTEGER NOT NULL,
+    matched_keywords        TEXT,
+    is_public_consultation  INTEGER,
+    classifier_score        REAL,
+    extracted_date          TEXT,
+    extracted_time          TEXT,
+    extracted_place         TEXT,
+    extracted_subject       TEXT,
+    processed_at            TEXT NOT NULL
+)
 """
 
 
@@ -76,6 +95,7 @@ class ArticleDB:
         with self._conn() as conn:
             conn.execute(CREATE_TABLE)
             conn.execute(CREATE_FTS)
+            conn.execute(CREATE_ANALYSIS_TABLE)
 
     # ------------------------------------------------------------------
     # Write
@@ -176,6 +196,69 @@ class ArticleDB:
         }
 
 
+    # ------------------------------------------------------------------
+    # Analysis
+    # ------------------------------------------------------------------
+
+    def save_analysis(self, result: "AnalysisResult") -> int | None:
+        """Insert or replace an analysis row. Returns the row id."""
+        from pipeline.models import AnalysisResult  # local import avoids circular deps
+        with self._conn() as conn:
+            try:
+                cur = conn.execute(
+                    """
+                    INSERT OR REPLACE INTO article_analysis (
+                        article_id, keyword_matched, matched_keywords,
+                        is_public_consultation, classifier_score,
+                        extracted_date, extracted_time, extracted_place,
+                        extracted_subject, processed_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        result.article_id,
+                        int(result.keyword_matched),
+                        json.dumps(result.matched_keywords, ensure_ascii=False),
+                        None if result.is_public_consultation is None else int(result.is_public_consultation),
+                        result.classifier_score,
+                        result.extracted_date,
+                        result.extracted_time,
+                        result.extracted_place,
+                        result.extracted_subject,
+                        result.processed_at,
+                    ),
+                )
+                return cur.lastrowid
+            except sqlite3.IntegrityError:
+                return None
+
+    def get_analysis(self, article_id: int) -> "AnalysisResult | None":
+        """Return the analysis row for *article_id*, or None."""
+        from pipeline.models import AnalysisResult
+        with self._conn() as conn:
+            row = conn.execute(
+                "SELECT * FROM article_analysis WHERE article_id = ?", (article_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return _row_to_analysis(row)
+
+    def list_unprocessed(self, limit: int = 32) -> list[Article]:
+        """Return articles that have no entry in article_analysis."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT articles.*
+                FROM articles
+                LEFT JOIN article_analysis ON articles.id = article_analysis.article_id
+                WHERE article_analysis.article_id IS NULL
+                ORDER BY articles.scraped_at ASC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [_row_to_article(r) for r in rows]
+
+
 def _row_to_article(row: sqlite3.Row) -> Article:
     return Article(
         id=row["id"],
@@ -186,4 +269,21 @@ def _row_to_article(row: sqlite3.Row) -> Article:
         content=row["content"],
         source_url=row["source_url"],
         scraped_at=row["scraped_at"],
+    )
+
+
+def _row_to_analysis(row: sqlite3.Row):
+    from pipeline.models import AnalysisResult
+    ipc = row["is_public_consultation"]
+    return AnalysisResult(
+        article_id=row["article_id"],
+        keyword_matched=bool(row["keyword_matched"]),
+        matched_keywords=json.loads(row["matched_keywords"] or "[]"),
+        is_public_consultation=None if ipc is None else bool(ipc),
+        classifier_score=row["classifier_score"],
+        extracted_date=row["extracted_date"],
+        extracted_time=row["extracted_time"],
+        extracted_place=row["extracted_place"],
+        extracted_subject=row["extracted_subject"],
+        processed_at=row["processed_at"],
     )
