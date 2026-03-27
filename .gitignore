@@ -81,3 +81,4 @@ fabric.properties
 .idea/*.iml
 
 .ipynb_checkpoints
+*.db
