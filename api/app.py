@@ -28,6 +28,18 @@ db = ArticleDB(db_path=DB_PATH)
 # ---------------------------------------------------------------------------
 
 
+class AnalysisOut(BaseModel):
+    keyword_matched: bool
+    matched_keywords: list[str]
+    is_public_consultation: bool | None
+    classifier_score: float | None
+    extracted_date: str | None
+    extracted_time: str | None
+    extracted_place: str | None
+    extracted_subject: str | None
+    processed_at: str
+
+
 class ArticleOut(BaseModel):
     id: int
     url: str
@@ -37,6 +49,7 @@ class ArticleOut(BaseModel):
     content: str | None
     source_url: str | None
     scraped_at: str
+    analysis: AnalysisOut | None = None
 
 
 class ArticleListOut(BaseModel):
@@ -71,6 +84,7 @@ class JobOut(BaseModel):
 app = FastAPI(title="Article Scraper API")
 
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
+# FRONTEND_DIR = Path(__file__).parent.parent / "rag-front" / "dist"
 
 
 @app.get("/", include_in_schema=False)
@@ -78,6 +92,7 @@ def index():
     return FileResponse(FRONTEND_DIR / "index.html")
 
 
+# app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 
@@ -104,7 +119,8 @@ def get_article(article_id: int):
     article = db.get_article(article_id)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
-    return _to_out(article)
+    analysis = db.get_analysis(article_id)
+    return _to_out(article, analysis)
 
 
 @app.delete("/api/articles/{article_id}")
@@ -160,11 +176,58 @@ def get_job(job_id: str):
 
 
 # ---------------------------------------------------------------------------
+# Process jobs
+# ---------------------------------------------------------------------------
+
+
+class ProcessRequest(BaseModel):
+    batch_size: int = Field(default=32, ge=1, le=500)
+
+
+def _run_process(job_id: str, req: ProcessRequest) -> None:
+    registry.update(job_id, JobStatus.RUNNING)
+    try:
+        from pipeline.runner import run_pipeline
+        summary = run_pipeline(db, batch_size=req.batch_size, verbose=False)
+        registry.update(job_id, JobStatus.DONE, summary=summary)
+    except Exception as exc:
+        registry.update(job_id, JobStatus.FAILED, error=str(exc))
+
+
+@app.post("/api/process", response_model=JobOut, status_code=202)
+def start_process(req: ProcessRequest, background_tasks: BackgroundTasks):
+    job = registry.create()
+    background_tasks.add_task(_run_process, job.id, req)
+    return _job_to_out(job)
+
+
+@app.get("/api/process/{job_id}", response_model=JobOut)
+def get_process_job(job_id: str):
+    job = registry.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_to_out(job)
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
-def _to_out(a) -> ArticleOut:
+def _to_out(a, analysis=None) -> ArticleOut:
+    analysis_out = None
+    if analysis is not None:
+        analysis_out = AnalysisOut(
+            keyword_matched=analysis.keyword_matched,
+            matched_keywords=analysis.matched_keywords,
+            is_public_consultation=analysis.is_public_consultation,
+            classifier_score=analysis.classifier_score,
+            extracted_date=analysis.extracted_date,
+            extracted_time=analysis.extracted_time,
+            extracted_place=analysis.extracted_place,
+            extracted_subject=analysis.extracted_subject,
+            processed_at=analysis.processed_at,
+        )
     return ArticleOut(
         id=a.id,
         url=a.url,
@@ -174,6 +237,7 @@ def _to_out(a) -> ArticleOut:
         content=a.content,
         source_url=a.source_url,
         scraped_at=a.scraped_at,
+        analysis=analysis_out,
     )
 
 

@@ -1,7 +1,6 @@
 .article-detail-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
   animation: fadeIn 0.3s ease;
 }
 
@@ -10,7 +9,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
+  min-height: 100%;
   color: var(--text-muted);
   text-align: center;
   gap: 1.5rem;
@@ -76,6 +75,125 @@
   border-radius: var(--radius-lg);
   box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
   border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+/* Analysis Panel */
+.analysis-panel {
+  margin-top: 2rem;
+  background: white;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  border-radius: var(--radius-lg);
+  padding: 1.75rem 2.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0,0,0,0.03);
+}
+
+.analysis-panel--empty {
+  padding: 1rem 2.5rem;
+  display: flex;
+  align-items: center;
+}
+
+.analysis-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.analysis-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.analysis-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.analysis-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 160px;
+}
+
+.analysis-badge {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+}
+
+.analysis-badge--positive {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.analysis-badge--negative {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.analysis-badge--neutral {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.analysis-score {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.analysis-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.analysis-keyword-tag {
+  font-size: 0.78rem;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+}
+
+.analysis-entities {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.analysis-entity-table {
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.analysis-entity-table td {
+  padding: 0.3rem 0.75rem 0.3rem 0;
+  color: #334155;
+  vertical-align: top;
+}
+
+.analysis-entity-table td:first-child {
+  font-weight: 500;
+  color: var(--text-secondary);
+  width: 80px;
+}
+
+.analysis-footer {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
 }
 
 /* Loading Skeleton */

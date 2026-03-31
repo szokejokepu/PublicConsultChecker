@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Trash2, ExternalLink, PenTool, LayoutTemplate } from 'lucide-react';
 import './ArticleDetail.css';
 import { fetchJSON } from '../api';
-import type { Article } from '../api';
+import type { Article, Analysis } from '../api';
 
 export default function ArticleDetail({ 
   articleId, 
@@ -114,6 +114,80 @@ export default function ArticleDetail({
 
       <div className="article-body">
         {article.content || <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No extractable content found.</span>}
+      </div>
+
+      <AnalysisPanel analysis={article.analysis} />
+    </div>
+  );
+}
+
+function AnalysisPanel({ analysis }: { analysis: Analysis | null }) {
+  if (!analysis) {
+    return (
+      <div className="analysis-panel analysis-panel--empty">
+        <span className="analysis-badge analysis-badge--neutral">Not yet processed</span>
+      </div>
+    );
+  }
+
+  const consultationLabel =
+    analysis.is_public_consultation === null
+      ? 'Not classified'
+      : analysis.is_public_consultation
+      ? 'Yes'
+      : 'No';
+  const consultationClass =
+    analysis.is_public_consultation === null
+      ? 'analysis-badge--neutral'
+      : analysis.is_public_consultation
+      ? 'analysis-badge--positive'
+      : 'analysis-badge--negative';
+
+  return (
+    <div className="analysis-panel">
+      <h3 className="analysis-title">Analysis</h3>
+      <div className="analysis-grid">
+
+        <div className="analysis-row">
+          <span className="analysis-label">Keyword match</span>
+          <span className={`analysis-badge ${analysis.keyword_matched ? 'analysis-badge--positive' : 'analysis-badge--negative'}`}>
+            {analysis.keyword_matched ? 'Matched' : 'No match'}
+          </span>
+          {analysis.keyword_matched && analysis.matched_keywords.length > 0 && (
+            <div className="analysis-keywords">
+              {analysis.matched_keywords.map(kw => (
+                <span key={kw} className="analysis-keyword-tag">{kw}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="analysis-row">
+          <span className="analysis-label">Public consultation</span>
+          <span className={`analysis-badge ${consultationClass}`}>{consultationLabel}</span>
+          {analysis.classifier_score !== null && (
+            <span className="analysis-score">score: {analysis.classifier_score.toFixed(3)}</span>
+          )}
+        </div>
+
+        {(analysis.extracted_date || analysis.extracted_time || analysis.extracted_place || analysis.extracted_subject) && (
+          <div className="analysis-entities">
+            <span className="analysis-label">Extracted entities</span>
+            <table className="analysis-entity-table">
+              <tbody>
+                {analysis.extracted_date && <tr><td>Date</td><td>{analysis.extracted_date}</td></tr>}
+                {analysis.extracted_time && <tr><td>Time</td><td>{analysis.extracted_time}</td></tr>}
+                {analysis.extracted_place && <tr><td>Place</td><td>{analysis.extracted_place}</td></tr>}
+                {analysis.extracted_subject && <tr><td>Subject</td><td>{analysis.extracted_subject}</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="analysis-footer">
+          Processed: {new Date(analysis.processed_at).toLocaleString()}
+        </div>
+
       </div>
     </div>
   );

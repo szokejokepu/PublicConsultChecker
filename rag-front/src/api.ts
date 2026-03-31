@@ -14,6 +14,18 @@ export async function fetchJSON<T>(url: string, opts: RequestInit = {}): Promise
   return r.json();
 }
 
+export interface Analysis {
+  keyword_matched: boolean;
+  matched_keywords: string[];
+  is_public_consultation: boolean | null;
+  classifier_score: number | null;
+  extracted_date: string | null;
+  extracted_time: string | null;
+  extracted_place: string | null;
+  extracted_subject: string | null;
+  processed_at: string;
+}
+
 export interface Article {
   id: number;
   url: string;
@@ -23,6 +35,7 @@ export interface Article {
   content: string | null;
   source_url: string | null;
   scraped_at: string;
+  analysis: Analysis | null;
 }
 
 export interface ArticleListOut {
