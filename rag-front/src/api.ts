@@ -43,6 +43,12 @@ export interface ArticleListOut {
   total: number;
 }
 
+export interface ArticleFilters {
+  processed: 'any' | 'yes' | 'no';
+  consultation: 'any' | 'yes' | 'no' | 'unclassified';
+  min_score: string;
+}
+
 export interface StatsOut {
   total_articles: number;
   unique_sources: number;

@@ -242,6 +242,50 @@ class ArticleDB:
             return None
         return _row_to_analysis(row)
 
+    def filter_articles(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        processed: str = "any",       # "any" | "yes" | "no"
+        consultation: str = "any",    # "any" | "yes" | "no" | "unclassified"
+        min_score: float | None = None,
+    ) -> tuple[list[Article], int]:
+        """List articles with optional analysis filters, returns (articles, total)."""
+        conditions: list[str] = []
+        params: list = []
+
+        join = "LEFT JOIN article_analysis aa ON articles.id = aa.article_id"
+
+        if processed == "yes":
+            conditions.append("aa.article_id IS NOT NULL")
+        elif processed == "no":
+            conditions.append("aa.article_id IS NULL")
+
+        if consultation == "yes":
+            conditions.append("aa.is_public_consultation = 1")
+        elif consultation == "no":
+            conditions.append("aa.is_public_consultation = 0")
+        elif consultation == "unclassified":
+            conditions.append("aa.article_id IS NOT NULL AND aa.is_public_consultation IS NULL")
+
+        if min_score is not None:
+            conditions.append("aa.classifier_score >= ?")
+            params.append(min_score)
+
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        with self._conn() as conn:
+            total = conn.execute(
+                f"SELECT COUNT(*) FROM articles {join} {where}", params
+            ).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT articles.* FROM articles {join} {where} "
+                f"ORDER BY articles.scraped_at DESC LIMIT ? OFFSET ?",
+                params + [limit, offset],
+            ).fetchall()
+
+        return [_row_to_article(r) for r in rows], total
+
     def list_unprocessed(self, limit: int = 32) -> list[Article]:
         """Return articles that have no entry in article_analysis."""
         with self._conn() as conn:

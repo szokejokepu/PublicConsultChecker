@@ -11,16 +11,29 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/articles", response_model=ArticleListOut)
-def list_articles(limit: int = 50, offset: int = 0, search: str = ""):
+def list_articles(
+    limit: int = 50,
+    offset: int = 0,
+    search: str = "",
+    processed: str = "any",
+    consultation: str = "any",
+    min_score: float | None = None,
+):
     if search:
         articles = db.search_articles(search, limit=limit)
+        total = len(articles)
+    elif processed != "any" or consultation != "any" or min_score is not None:
+        articles, total = db.filter_articles(
+            limit=limit,
+            offset=offset,
+            processed=processed,
+            consultation=consultation,
+            min_score=min_score,
+        )
     else:
         articles = db.list_articles(limit=limit, offset=offset)
-    stats = db.get_stats()
-    return ArticleListOut(
-        articles=[_to_out(a) for a in articles],
-        total=stats["total_articles"],
-    )
+        total = db.get_stats()["total_articles"]
+    return ArticleListOut(articles=[_to_out(a) for a in articles], total=total)
 
 
 @router.get("/articles/{article_id}", response_model=ArticleOut)

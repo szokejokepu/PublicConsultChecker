@@ -13,9 +13,114 @@
   padding: 1rem 1.25rem;
   border-bottom: 1px solid var(--border-color);
   background: var(--bg-main);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.toolbar-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.filter-toggle-btn {
+  flex-shrink: 0;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5rem;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.filter-toggle-btn:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.filter-toggle-btn.active {
+  background: var(--accent-light);
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.filter-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  animation: fadeIn 0.15s ease;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.filter-label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  min-width: 80px;
+}
+
+.filter-select,
+.filter-input {
+  flex: 1;
+  padding: 0.35rem 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  color: var(--text-primary);
+  background: white;
+  font-family: inherit;
+}
+
+.filter-select:focus,
+.filter-input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-light);
+}
+
+.filter-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.filter-active-hint {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--accent-primary);
+  font-weight: 500;
+}
+
+.filter-clear-inline {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0;
+}
+
+.filter-clear-inline:hover {
+  color: var(--danger);
 }
 
 .search-box {
+  flex: 1;
   display: flex;
   align-items: center;
   background: white;
