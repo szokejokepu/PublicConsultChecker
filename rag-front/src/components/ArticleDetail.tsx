@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Trash2, ExternalLink, PenTool, LayoutTemplate } from 'lucide-react';
+import { Trash2, ExternalLink, PenTool, LayoutTemplate, Cpu, Loader2 } from 'lucide-react';
 import './ArticleDetail.css';
 import { fetchJSON } from '../api';
 import type { Article, Analysis } from '../api';
@@ -13,25 +13,41 @@ export default function ArticleDetail({
 }) {
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+
+  const loadArticle = async (id: number) => {
+    setLoading(true);
+    try {
+      const data = await fetchJSON<Article>(`/api/articles/${id}`);
+      setArticle(data);
+    } catch (e) {
+      console.error("Failed to load article detail", e);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!articleId) {
       setArticle(null);
       return;
     }
-    const load = async () => {
-      setLoading(true);
-      try {
-        const data = await fetchJSON<Article>(`/api/articles/${articleId}`);
-        setArticle(data);
-      } catch (e) {
-        console.error("Failed to load article detail", e);
-      } finally {
-        setLoading(false);
-      }
-    };
-    load();
+    loadArticle(articleId);
   }, [articleId]);
+
+  const handleProcess = async () => {
+    if (!articleId) return;
+    setProcessing(true);
+    try {
+      await fetchJSON(`/api/articles/${articleId}/process`, { method: 'POST' });
+      await loadArticle(articleId);
+    } catch (e) {
+      console.error("Failed to process article", e);
+      alert('Processing failed');
+    } finally {
+      setProcessing(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!articleId) return;
@@ -106,6 +122,10 @@ export default function ArticleDetail({
         </div>
 
         <div className="article-actions">
+          <button className="btn btn-outline" onClick={handleProcess} disabled={processing}>
+            {processing ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
+            {processing ? 'Processing…' : article.analysis ? 'Reprocess' : 'Process'}
+          </button>
           <button className="btn btn-danger" onClick={handleDelete}>
             <Trash2 size={16} /> Delete Article
           </button>

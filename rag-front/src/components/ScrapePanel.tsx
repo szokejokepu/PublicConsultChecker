@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { Network, Loader2, Play } from 'lucide-react';
+import { Network, Loader2, Play, Cpu } from 'lucide-react';
 import './ScrapePanel.css';
 import { fetchJSON } from '../api';
 import type { ScrapeRequest, JobOut } from '../api';
@@ -14,6 +14,10 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
   const [submitting, setSubmitting] = useState(false);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
   const [jobStatus, setJobStatus] = useState<JobOut | null>(null);
+
+  const [processing, setProcessing] = useState(false);
+  const [activeProcessJobId, setActiveProcessJobId] = useState<string | null>(null);
+  const [processJobStatus, setProcessJobStatus] = useState<JobOut | null>(null);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -52,7 +56,7 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
       try {
         const job = await fetchJSON<JobOut>(`/api/scrape/${activeJobId}`);
         setJobStatus(job);
-        
+
         if (job.status === 'done' || job.status === 'failed') {
           clearInterval(interval);
           setActiveJobId(null);
@@ -67,6 +71,44 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
 
     return () => clearInterval(interval);
   }, [activeJobId, onJobDone]);
+
+  const handleProcess = async () => {
+    setProcessing(true);
+    try {
+      const job = await fetchJSON<JobOut>('/api/process', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ batch_size: 32 }),
+      });
+      setActiveProcessJobId(job.job_id);
+      setProcessJobStatus(job);
+    } catch (err: any) {
+      console.error(err);
+      alert('Failed to start processing: ' + err.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!activeProcessJobId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        const job = await fetchJSON<JobOut>(`/api/process/${activeProcessJobId}`);
+        setProcessJobStatus(job);
+
+        if (job.status === 'done' || job.status === 'failed') {
+          clearInterval(interval);
+          setActiveProcessJobId(null);
+        }
+      } catch (err) {
+        console.error("Failed to fetch process job status", err);
+      }
+    }, 1500);
+
+    return () => clearInterval(interval);
+  }, [activeProcessJobId]);
 
   const getBadgeClass = (status: string) => {
     switch(status) {
@@ -152,6 +194,59 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
           </div>
         </form>
       </div>
+
+      <div className="scrape-form-card">
+        <div className="scrape-header">
+          <h2 className="scrape-title"><Cpu size={20} className="app-brand-icon" /> Process All Articles</h2>
+          <p className="scrape-desc">Run the NLP pipeline on every article that hasn't been analysed yet. Already-processed articles are skipped automatically.</p>
+        </div>
+        <div className="form-actions">
+          <button
+            className="btn btn-primary"
+            onClick={handleProcess}
+            disabled={!!activeProcessJobId || processing}
+          >
+            {(processing || activeProcessJobId) ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}
+            {activeProcessJobId ? 'Processing…' : 'Process All'}
+          </button>
+        </div>
+      </div>
+
+      {processJobStatus && (
+        <div className={`job-status-card animate-fade-in ${processJobStatus.status}`}>
+          <div className="job-header">
+            <div className="job-state-container">
+              <span className={`job-badge ${getBadgeClass(processJobStatus.status)}`}>
+                {processJobStatus.status}
+              </span>
+              <span style={{ fontWeight: 500, color: '#1e293b' }}>
+                {processJobStatus.status === 'pending' && 'Waiting to start...'}
+                {processJobStatus.status === 'running' && 'Pipeline running...'}
+                {processJobStatus.status === 'done' && 'Processing Complete!'}
+                {processJobStatus.status === 'failed' && 'Processing Failed.'}
+              </span>
+              {(processJobStatus.status === 'running' || processJobStatus.status === 'pending') && (
+                <Loader2 size={16} className="animate-spin" style={{ color: 'var(--accent-primary)' }} />
+              )}
+            </div>
+            <span className="job-id">job_{processJobStatus.job_id.slice(0, 8)}...</span>
+          </div>
+
+          {processJobStatus.summary && Object.keys(processJobStatus.summary).length > 0 && (
+            <div className="job-summary">
+              <strong>Processed:</strong> {processJobStatus.summary.processed} &bull;{' '}
+              <strong>Keyword matched:</strong> {processJobStatus.summary.matched} &bull;{' '}
+              <strong>Consultations found:</strong> {processJobStatus.summary.classified_positive}
+            </div>
+          )}
+
+          {processJobStatus.error && (
+            <div style={{ color: 'var(--danger)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
+              <strong>Error:</strong> {processJobStatus.error}
+            </div>
+          )}
+        </div>
+      )}
 
       {jobStatus && (
         <div className={`job-status-card animate-fade-in ${jobStatus.status}`}>

@@ -123,6 +123,26 @@ def get_article(article_id: int):
     return _to_out(article, analysis)
 
 
+@app.post("/api/articles/{article_id}/process", response_model=AnalysisOut)
+def process_article(article_id: int):
+    article = db.get_article(article_id)
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+    from pipeline.runner import process_single
+    result = process_single(article, db)
+    return AnalysisOut(
+        keyword_matched=result.keyword_matched,
+        matched_keywords=result.matched_keywords,
+        is_public_consultation=result.is_public_consultation,
+        classifier_score=result.classifier_score,
+        extracted_date=result.extracted_date,
+        extracted_time=result.extracted_time,
+        extracted_place=result.extracted_place,
+        extracted_subject=result.extracted_subject,
+        processed_at=result.processed_at,
+    )
+
+
 @app.delete("/api/articles/{article_id}")
 def delete_article(article_id: int):
     removed = db.delete_article(article_id)
@@ -188,8 +208,14 @@ def _run_process(job_id: str, req: ProcessRequest) -> None:
     registry.update(job_id, JobStatus.RUNNING)
     try:
         from pipeline.runner import run_pipeline
-        summary = run_pipeline(db, batch_size=req.batch_size, verbose=False)
-        registry.update(job_id, JobStatus.DONE, summary=summary)
+        total = {"processed": 0, "matched": 0, "classified_positive": 0}
+        while True:
+            summary = run_pipeline(db, batch_size=req.batch_size, verbose=False)
+            for k in total:
+                total[k] += summary[k]
+            if summary["processed"] == 0:
+                break
+        registry.update(job_id, JobStatus.DONE, summary=total)
     except Exception as exc:
         registry.update(job_id, JobStatus.FAILED, error=str(exc))
 
