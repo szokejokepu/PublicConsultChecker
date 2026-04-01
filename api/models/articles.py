@@ -39,3 +39,11 @@ class StatsOut(BaseModel):
     total_articles: int
     unique_sources: int
     newest_scraped_at: str | None
+
+
+class ProcessArticleRequest(BaseModel):
+    use_keyword_filter: bool = True
+
+
+class StarRequest(BaseModel):
+    starred: bool

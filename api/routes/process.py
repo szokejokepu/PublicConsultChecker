@@ -17,7 +17,7 @@ def _run_process(job_id: str, req: ProcessRequest) -> None:
         from pipeline.runner import run_pipeline
         total = {"processed": 0, "matched": 0, "classified_positive": 0}
         while True:
-            summary = run_pipeline(db, batch_size=req.batch_size, verbose=False)
+            summary = run_pipeline(db, batch_size=req.batch_size, verbose=False, use_keyword_filter=req.use_keyword_filter)
             for k in total:
                 total[k] += summary[k]
             if summary["processed"] == 0:

@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
 
 from api.dependencies import db
-from api.models.articles import AnalysisOut, ArticleListOut, ArticleOut, StatsOut
+from api.models.articles import AnalysisOut, ArticleListOut, ArticleOut, ProcessArticleRequest, StarRequest, StatsOut
 
 router = APIRouter(prefix="/api")
 
@@ -49,12 +48,12 @@ def get_article(article_id: int):
 
 
 @router.post("/articles/{article_id}/process", response_model=AnalysisOut)
-def process_article(article_id: int):
+def process_article(article_id: int, req: ProcessArticleRequest = ProcessArticleRequest()):
     article = db.get_article(article_id)
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     from pipeline.runner import process_single
-    result = process_single(article, db)
+    result = process_single(article, db, use_keyword_filter=req.use_keyword_filter)
     return AnalysisOut(
         keyword_matched=result.keyword_matched,
         matched_keywords=result.matched_keywords,
@@ -67,9 +66,6 @@ def process_article(article_id: int):
         processed_at=result.processed_at,
     )
 
-
-class StarRequest(BaseModel):
-    starred: bool
 
 
 @router.patch("/articles/{article_id}/star", response_model=ArticleOut)

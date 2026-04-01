@@ -13,14 +13,14 @@ from .ner import extract_entities
 from .normalizer import normalize
 
 
-def process_single(article, db: ArticleDB) -> AnalysisResult:
+def process_single(article, db: ArticleDB, use_keyword_filter: bool = True) -> AnalysisResult:
     """Process or reprocess a single article, overwriting any existing analysis."""
     processed_at = datetime.utcnow().isoformat()
     text = article.content or ""
     normalized, lowered = normalize(text)
     kw_matched, keywords = keyword_filter(lowered)
 
-    if not kw_matched:
+    if use_keyword_filter and not kw_matched:
         result = AnalysisResult(
             article_id=article.id,
             keyword_matched=False,
@@ -38,7 +38,7 @@ def process_single(article, db: ArticleDB) -> AnalysisResult:
         entities = extract_entities(text)
         result = AnalysisResult(
             article_id=article.id,
-            keyword_matched=True,
+            keyword_matched=kw_matched,
             matched_keywords=keywords,
             is_public_consultation=is_positive,
             classifier_score=score,
@@ -57,6 +57,7 @@ def run_pipeline(
     db: ArticleDB,
     batch_size: int = 32,
     verbose: bool = True,
+    use_keyword_filter: bool = True,
 ) -> dict:
     """Process all articles not yet in article_analysis.
 
@@ -75,7 +76,7 @@ def run_pipeline(
 
         kw_matched, keywords = keyword_filter(lowered)
 
-        if not kw_matched:
+        if use_keyword_filter and not kw_matched:
             db.save_analysis(
                 AnalysisResult(
                     article_id=article.id,
@@ -95,7 +96,8 @@ def run_pipeline(
                 print(f"[pipeline] article #{article.id}: no keyword match — skipped")
             continue
 
-        matched += 1
+        if kw_matched:
+            matched += 1
         is_positive, score = classify(normalized)
         entities = extract_entities(text)
 
@@ -105,7 +107,7 @@ def run_pipeline(
         db.save_analysis(
             AnalysisResult(
                 article_id=article.id,
-                keyword_matched=True,
+                keyword_matched=kw_matched,
                 matched_keywords=keywords,
                 is_public_consultation=is_positive,
                 classifier_score=score,

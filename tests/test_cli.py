@@ -120,6 +120,32 @@ class TestScrapeConfig:
         assert "typo_key" in result.output
 
 
+class TestProcessCommand:
+    def _run(self, runner: CliRunner, args: list[str]) -> object:
+        return runner.invoke(cli, ["--db", ":memory:", "process"] + args, catch_exceptions=False)
+
+    def test_default_uses_keyword_filter(self, runner):
+        with patch("pipeline.runner.run_pipeline", return_value={"processed": 0, "matched": 0, "classified_positive": 0}) as mock:
+            result = self._run(runner, [])
+        assert result.exit_code == 0
+        _, kwargs = mock.call_args
+        assert kwargs["use_keyword_filter"] is True
+
+    def test_no_keyword_filter_flag(self, runner):
+        with patch("pipeline.runner.run_pipeline", return_value={"processed": 0, "matched": 0, "classified_positive": 0}) as mock:
+            result = self._run(runner, ["--no-keyword-filter"])
+        assert result.exit_code == 0
+        _, kwargs = mock.call_args
+        assert kwargs["use_keyword_filter"] is False
+
+    def test_batch_size_passed_through(self, runner):
+        with patch("pipeline.runner.run_pipeline", return_value={"processed": 0, "matched": 0, "classified_positive": 0}) as mock:
+            result = self._run(runner, ["--batch-size", "64"])
+        assert result.exit_code == 0
+        _, kwargs = mock.call_args
+        assert kwargs["batch_size"] == 64
+
+
 class TestScrapeConfigDataclass:
     def test_from_dict_all_fields(self):
         cfg = ScrapeConfig.from_dict({

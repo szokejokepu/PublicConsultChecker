@@ -3,6 +3,8 @@ import { Trash2, ExternalLink, PenTool, LayoutTemplate, Cpu, Loader2 } from 'luc
 import './ArticleDetail.css';
 import { fetchJSON } from '../api';
 import type { Article, Analysis } from '../api';
+import ProcessModal from './ProcessModal';
+import type { ProcessConfig } from './ProcessModal';
 
 export default function ArticleDetail({ 
   articleId, 
@@ -14,6 +16,7 @@ export default function ArticleDetail({
   const [article, setArticle] = useState<Article | null>(null);
   const [loading, setLoading] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [showModal, setShowModal] = useState(false);
 
   const loadArticle = async (id: number) => {
     setLoading(true);
@@ -35,11 +38,15 @@ export default function ArticleDetail({
     loadArticle(articleId);
   }, [articleId]);
 
-  const handleProcess = async () => {
+  const handleProcess = async (config: ProcessConfig) => {
     if (!articleId) return;
     setProcessing(true);
     try {
-      await fetchJSON(`/api/articles/${articleId}/process`, { method: 'POST' });
+      await fetchJSON(`/api/articles/${articleId}/process`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config),
+      });
       await loadArticle(articleId);
     } catch (e) {
       console.error("Failed to process article", e);
@@ -122,10 +129,17 @@ export default function ArticleDetail({
         </div>
 
         <div className="article-actions">
-          <button className="btn btn-outline" onClick={handleProcess} disabled={processing}>
+          <button className="btn btn-outline" onClick={() => setShowModal(true)} disabled={processing}>
             {processing ? <Loader2 size={16} className="animate-spin" /> : <Cpu size={16} />}
             {processing ? 'Processing…' : article.analysis ? 'Reprocess' : 'Process'}
           </button>
+          {showModal && (
+            <ProcessModal
+              title={article.analysis ? 'Reprocess Article' : 'Process Article'}
+              onConfirm={handleProcess}
+              onClose={() => setShowModal(false)}
+            />
+          )}
           <button className="btn btn-danger" onClick={handleDelete}>
             <Trash2 size={16} /> Delete Article
           </button>

@@ -9,6 +9,7 @@ KEYWORDS: list[str] = [
     "ședință publică",
     "supuse dezbaterii",
     "anunț public",
+    "consultarea publicului"
 ]
 
 
@@ -18,4 +19,5 @@ def keyword_filter(lowercased_text: str) -> tuple[bool, list[str]]:
     Returns ``(matched, keywords_found)``.
     """
     found = [kw for kw in KEYWORDS if kw in lowercased_text]
+    # return True, found
     return bool(found), found

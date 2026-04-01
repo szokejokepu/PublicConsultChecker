@@ -160,12 +160,13 @@ def delete(ctx: click.Context, id: int) -> None:
 @cli.command()
 @click.option("--batch-size", default=32, show_default=True, help="Articles to process per run.")
 @click.option("--quiet", "-q", is_flag=True, help="Suppress per-article output.")
+@click.option("--no-keyword-filter", is_flag=True, default=False, help="Skip keyword filter and classify all articles.")
 @click.pass_context
-def process(ctx: click.Context, batch_size: int, quiet: bool) -> None:
+def process(ctx: click.Context, batch_size: int, quiet: bool, no_keyword_filter: bool) -> None:
     """Run the NLP pipeline on unprocessed articles."""
     from pipeline.runner import run_pipeline
     db: ArticleDB = ctx.obj["db"]
-    summary = run_pipeline(db, batch_size=batch_size, verbose=not quiet)
+    summary = run_pipeline(db, batch_size=batch_size, verbose=not quiet, use_keyword_filter=not no_keyword_filter)
     click.echo(
         f"\nDone — processed: {summary['processed']}, "
         f"keyword matched: {summary['matched']}, "

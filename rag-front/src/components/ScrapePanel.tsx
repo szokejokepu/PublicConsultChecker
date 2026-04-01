@@ -4,6 +4,8 @@ import { Network, Loader2, Play, Cpu } from 'lucide-react';
 import './ScrapePanel.css';
 import { fetchJSON } from '../api';
 import type { ScrapeRequest, JobOut } from '../api';
+import ProcessModal from './ProcessModal';
+import type { ProcessConfig } from './ProcessModal';
 
 export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
   const [url, setUrl] = useState('');
@@ -18,6 +20,7 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
   const [processing, setProcessing] = useState(false);
   const [activeProcessJobId, setActiveProcessJobId] = useState<string | null>(null);
   const [processJobStatus, setProcessJobStatus] = useState<JobOut | null>(null);
+  const [showProcessModal, setShowProcessModal] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -72,13 +75,13 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
     return () => clearInterval(interval);
   }, [activeJobId, onJobDone]);
 
-  const handleProcess = async () => {
+  const handleProcess = async (config: ProcessConfig) => {
     setProcessing(true);
     try {
       const job = await fetchJSON<JobOut>('/api/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch_size: 32 }),
+        body: JSON.stringify({ batch_size: 32, use_keyword_filter: config.use_keyword_filter }),
       });
       setActiveProcessJobId(job.job_id);
       setProcessJobStatus(job);
@@ -201,9 +204,16 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
           <p className="scrape-desc">Run the NLP pipeline on every article that hasn't been analysed yet. Already-processed articles are skipped automatically.</p>
         </div>
         <div className="form-actions">
+          {showProcessModal && (
+            <ProcessModal
+              title="Process All Articles"
+              onConfirm={handleProcess}
+              onClose={() => setShowProcessModal(false)}
+            />
+          )}
           <button
             className="btn btn-primary"
-            onClick={handleProcess}
+            onClick={() => setShowProcessModal(true)}
             disabled={!!activeProcessJobId || processing}
           >
             {(processing || activeProcessJobId) ? <Loader2 size={16} className="animate-spin" /> : <Play size={16} fill="currentColor" />}

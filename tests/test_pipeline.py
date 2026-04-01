@@ -224,3 +224,102 @@ def test_runner_end_to_end():
     assert analysis is not None
     assert analysis.is_public_consultation is True
     assert analysis.classifier_score == pytest.approx(0.80)
+
+
+# ---------------------------------------------------------------------------
+# Runner — use_keyword_filter flag
+# ---------------------------------------------------------------------------
+
+
+def test_runner_no_keyword_filter_classifies_without_keyword_match():
+    """Articles that don't match any keyword should still be classified when the filter is disabled."""
+    db = _make_db()
+    art_id = _insert_article(db, "http://example.com/no-kw")
+
+    with db._conn() as conn:
+        conn.execute(
+            "UPDATE articles SET content = ? WHERE id = ?",
+            ("Știri locale despre infrastructură rutieră.", art_id),
+        )
+
+    with patch("pipeline.runner.classify", return_value=(False, 0.30)) as mock_cls, patch(
+        "pipeline.runner.extract_entities",
+        return_value={"extracted_date": None, "extracted_time": None,
+                      "extracted_place": None, "extracted_subject": None},
+    ):
+        from pipeline.runner import run_pipeline
+        summary = run_pipeline(db, batch_size=10, verbose=False, use_keyword_filter=False)
+
+    mock_cls.assert_called_once()
+    assert summary["processed"] == 1
+    analysis = db.get_analysis(art_id)
+    assert analysis is not None
+    assert analysis.classifier_score == pytest.approx(0.30)
+
+
+def test_runner_keyword_filter_enabled_skips_no_match():
+    """Default behaviour: articles without keyword matches are saved without classification."""
+    db = _make_db()
+    art_id = _insert_article(db, "http://example.com/no-kw")
+
+    with db._conn() as conn:
+        conn.execute(
+            "UPDATE articles SET content = ? WHERE id = ?",
+            ("Știri locale despre infrastructură rutieră.", art_id),
+        )
+
+    with patch("pipeline.runner.classify") as mock_cls:
+        from pipeline.runner import run_pipeline
+        run_pipeline(db, batch_size=10, verbose=False, use_keyword_filter=True)
+
+    mock_cls.assert_not_called()
+    analysis = db.get_analysis(art_id)
+    assert analysis is not None
+    assert analysis.is_public_consultation is None
+    assert analysis.classifier_score is None
+
+
+def test_process_single_no_keyword_filter_classifies_all():
+    """process_single with use_keyword_filter=False always runs the classifier."""
+    db = _make_db()
+    art_id = _insert_article(db, "http://example.com/single")
+
+    with db._conn() as conn:
+        conn.execute(
+            "UPDATE articles SET content = ? WHERE id = ?",
+            ("Știri fără cuvinte cheie relevante.", art_id),
+        )
+
+    article = db.get_article(art_id)
+    with patch("pipeline.runner.classify", return_value=(True, 0.55)) as mock_cls, patch(
+        "pipeline.runner.extract_entities",
+        return_value={"extracted_date": None, "extracted_time": None,
+                      "extracted_place": None, "extracted_subject": None},
+    ):
+        from pipeline.runner import process_single
+        result = process_single(article, db, use_keyword_filter=False)
+
+    mock_cls.assert_called_once()
+    assert result.is_public_consultation is True
+    assert result.classifier_score == pytest.approx(0.55)
+
+
+def test_process_single_keyword_filter_enabled_skips_no_match():
+    """process_single default behaviour: no classify call when keywords don't match."""
+    db = _make_db()
+    art_id = _insert_article(db, "http://example.com/single-kw")
+
+    with db._conn() as conn:
+        conn.execute(
+            "UPDATE articles SET content = ? WHERE id = ?",
+            ("Știri fără cuvinte cheie relevante.", art_id),
+        )
+
+    article = db.get_article(art_id)
+    with patch("pipeline.runner.classify") as mock_cls:
+        from pipeline.runner import process_single
+        result = process_single(article, db, use_keyword_filter=True)
+
+    mock_cls.assert_not_called()
+    assert result.is_public_consultation is None
+    assert result.classifier_score is None
