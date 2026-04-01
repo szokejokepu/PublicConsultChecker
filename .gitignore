@@ -82,3 +82,5 @@ fabric.properties
 
 .ipynb_checkpoints
 *.db
+__pychache__
+*.pyc
