@@ -63,14 +63,6 @@ export default function App() {
 
       {/* Main Layout Grid */}
       <div className="app-layout">
-        {/* Left Sidebar */}
-        <Sidebar 
-          selectedId={selectedArticleId} 
-          onSelect={handleSelectArticle} 
-          refreshTrigger={refreshTrigger}
-        />
-
-        {/* Right Main Content */}
         <main className="main-content">
           <nav className="main-nav">
             <div 
@@ -89,16 +81,27 @@ export default function App() {
 
           <div className="content-panel">
             {activeTab === 'detail' && (
-              <ArticleDetail 
-                articleId={selectedArticleId} 
-                onDeleted={() => {
-                  setSelectedArticleId(null);
-                  triggerRefresh();
-                }}
-              />
+              <div className="article-layout">
+                <Sidebar 
+                  selectedId={selectedArticleId} 
+                  onSelect={handleSelectArticle} 
+                  refreshTrigger={refreshTrigger}
+                />
+                <div className="scrollable-content">
+                  <ArticleDetail 
+                    articleId={selectedArticleId} 
+                    onDeleted={() => {
+                      setSelectedArticleId(null);
+                      triggerRefresh();
+                    }}
+                  />
+                </div>
+              </div>
             )}
             {activeTab === 'scrape' && (
-              <ScrapePanel onJobDone={triggerRefresh} />
+              <div className="scrollable-content">
+                <ScrapePanel onJobDone={triggerRefresh} />
+              </div>
             )}
           </div>
         </main>

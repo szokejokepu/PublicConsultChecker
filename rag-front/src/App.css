@@ -55,8 +55,8 @@
 }
 
 .app-layout {
-  display: grid;
-  grid-template-columns: 380px 1fr;
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -117,7 +117,22 @@
 .content-panel {
   flex: 1;
   min-height: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.article-layout {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  height: 100%;
+  flex: 1;
+  min-height: 0;
+}
+
+.scrollable-content {
+  flex: 1;
   overflow-y: auto;
   padding: 2rem;
-  position: relative;
+  height: 100%;
 }
