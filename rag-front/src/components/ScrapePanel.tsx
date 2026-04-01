@@ -81,7 +81,7 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
       const job = await fetchJSON<JobOut>('/api/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ batch_size: 32, use_keyword_filter: config.use_keyword_filter }),
+        body: JSON.stringify({ batch_size: 32, use_keyword_filter: config.use_keyword_filter, reprocess_all: config.reprocess_all ?? false }),
       });
       setActiveProcessJobId(job.job_id);
       setProcessJobStatus(job);
@@ -207,6 +207,7 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
           {showProcessModal && (
             <ProcessModal
               title="Process All Articles"
+              showReprocessAll
               onConfirm={handleProcess}
               onClose={() => setShowProcessModal(false)}
             />

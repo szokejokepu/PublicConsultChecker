@@ -16,12 +16,22 @@ def _run_process(job_id: str, req: ProcessRequest) -> None:
     try:
         from pipeline.runner import run_pipeline
         total = {"processed": 0, "matched": 0, "classified_positive": 0}
+        offset = 0
         while True:
-            summary = run_pipeline(db, batch_size=req.batch_size, verbose=False, use_keyword_filter=req.use_keyword_filter)
+            summary = run_pipeline(
+                db,
+                batch_size=req.batch_size,
+                verbose=False,
+                use_keyword_filter=req.use_keyword_filter,
+                reprocess_all=req.reprocess_all,
+                _offset=offset,
+            )
             for k in total:
                 total[k] += summary[k]
             if summary["processed"] == 0:
                 break
+            if req.reprocess_all:
+                offset += summary["processed"]
         registry.update(job_id, JobStatus.DONE, summary=total)
     except Exception as exc:
         registry.update(job_id, JobStatus.FAILED, error=str(exc))

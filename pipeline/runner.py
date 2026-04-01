@@ -58,13 +58,20 @@ def run_pipeline(
     batch_size: int = 32,
     verbose: bool = True,
     use_keyword_filter: bool = True,
+    reprocess_all: bool = False,
+    _offset: int = 0,
 ) -> dict:
-    """Process all articles not yet in article_analysis.
+    """Process articles and return a summary dict with keys ``processed``,
+    ``matched``, ``classified_positive``.
 
-    Returns a summary dict with keys ``processed``, ``matched``,
-    ``classified_positive``.
+    When *reprocess_all* is False (default) only articles without an existing
+    analysis entry are processed.  When True every article is (re)processed,
+    using *_offset* for internal pagination across loop iterations.
     """
-    articles = db.list_unprocessed(limit=batch_size)
+    if reprocess_all:
+        articles = db.list_articles(limit=batch_size, offset=_offset)
+    else:
+        articles = db.list_unprocessed(limit=batch_size)
     processed = 0
     matched = 0
     classified_positive = 0

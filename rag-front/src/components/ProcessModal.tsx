@@ -4,19 +4,22 @@ import './ProcessModal.css';
 
 export interface ProcessConfig {
   use_keyword_filter: boolean;
+  reprocess_all?: boolean;
 }
 
 interface ProcessModalProps {
   title: string;
+  showReprocessAll?: boolean;
   onConfirm: (config: ProcessConfig) => void;
   onClose: () => void;
 }
 
-export default function ProcessModal({ title, onConfirm, onClose }: ProcessModalProps) {
+export default function ProcessModal({ title, showReprocessAll = false, onConfirm, onClose }: ProcessModalProps) {
   const [useKeywordFilter, setUseKeywordFilter] = useState(true);
+  const [reprocessAll, setReprocessAll] = useState(false);
 
   const handleConfirm = () => {
-    onConfirm({ use_keyword_filter: useKeywordFilter });
+    onConfirm({ use_keyword_filter: useKeywordFilter, reprocess_all: reprocessAll });
     onClose();
   };
 
@@ -48,6 +51,22 @@ export default function ProcessModal({ title, onConfirm, onClose }: ProcessModal
               </span>
             </div>
           </label>
+
+          {showReprocessAll && (
+            <label className="modal-option">
+              <input
+                type="checkbox"
+                checked={reprocessAll}
+                onChange={e => setReprocessAll(e.target.checked)}
+              />
+              <div className="modal-option-text">
+                <span className="modal-option-label">Reprocess already processed articles</span>
+                <span className="modal-option-desc">
+                  Run the pipeline on all articles, overwriting any existing analysis.
+                </span>
+              </div>
+            </label>
+          )}
         </div>
 
         <div className="modal-footer">

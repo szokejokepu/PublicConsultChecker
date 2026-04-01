@@ -17,6 +17,7 @@ class ScrapeRequest(BaseModel):
 class ProcessRequest(BaseModel):
     batch_size: int = Field(default=32, ge=1, le=500)
     use_keyword_filter: bool = True
+    reprocess_all: bool = False
 
 
 class JobOut(BaseModel):
