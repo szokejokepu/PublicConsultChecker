@@ -35,6 +35,7 @@ export interface Article {
   content: string | null;
   source_url: string | null;
   scraped_at: string;
+  starred: boolean;
   analysis: Analysis | null;
 }
 
@@ -47,6 +48,7 @@ export interface ArticleFilters {
   processed: 'any' | 'yes' | 'no';
   consultation: 'any' | 'yes' | 'no' | 'unclassified';
   min_score: string;
+  starred: 'any' | 'yes' | 'no';
 }
 
 export interface StatsOut {

@@ -26,6 +26,7 @@ class ArticleOut(BaseModel):
     content: str | None
     source_url: str | None
     scraped_at: str
+    starred: bool = False
     analysis: AnalysisOut | None = None
 
 

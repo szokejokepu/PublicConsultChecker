@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
 
 from api.dependencies import db
 from api.models.articles import AnalysisOut, ArticleListOut, ArticleOut, StatsOut
@@ -18,17 +19,19 @@ def list_articles(
     processed: str = "any",
     consultation: str = "any",
     min_score: float | None = None,
+    starred: str = "any",
 ):
     if search:
         articles = db.search_articles(search, limit=limit)
         total = len(articles)
-    elif processed != "any" or consultation != "any" or min_score is not None:
+    elif processed != "any" or consultation != "any" or min_score is not None or starred != "any":
         articles, total = db.filter_articles(
             limit=limit,
             offset=offset,
             processed=processed,
             consultation=consultation,
             min_score=min_score,
+            starred=starred,
         )
     else:
         articles = db.list_articles(limit=limit, offset=offset)
@@ -63,6 +66,19 @@ def process_article(article_id: int):
         extracted_subject=result.extracted_subject,
         processed_at=result.processed_at,
     )
+
+
+class StarRequest(BaseModel):
+    starred: bool
+
+
+@router.patch("/articles/{article_id}/star", response_model=ArticleOut)
+def star_article(article_id: int, req: StarRequest):
+    found = db.set_starred(article_id, req.starred)
+    if not found:
+        raise HTTPException(status_code=404, detail="Article not found")
+    article = db.get_article(article_id)
+    return _to_out(article)
 
 
 @router.delete("/articles/{article_id}")
@@ -101,5 +117,6 @@ def _to_out(a, analysis=None) -> ArticleOut:
         content=a.content,
         source_url=a.source_url,
         scraped_at=a.scraped_at,
+        starred=a.starred,
         analysis=analysis_out,
     )

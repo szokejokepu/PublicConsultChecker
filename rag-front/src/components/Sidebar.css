@@ -206,6 +206,28 @@
   color: var(--text-secondary);
 }
 
+.star-btn {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.1rem;
+  color: #cbd5e1;
+  display: flex;
+  align-items: center;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.star-btn:hover {
+  color: #f59e0b;
+  transform: scale(1.2);
+}
+
+.star-btn.starred {
+  color: #f59e0b;
+}
+
 .meta-icon {
   display: flex;
   align-items: center;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Search, Calendar, User, FileX2, SlidersHorizontal, X } from 'lucide-react';
+import { Search, Calendar, User, FileX2, SlidersHorizontal, X, Star } from 'lucide-react';
 import './Sidebar.css';
 import { fetchJSON } from '../api';
 import type { Article, ArticleFilters, ArticleListOut } from '../api';
@@ -17,10 +17,11 @@ const DEFAULT_FILTERS: ArticleFilters = {
   processed: 'any',
   consultation: 'any',
   min_score: '',
+  starred: 'any',
 };
 
 function filtersActive(f: ArticleFilters) {
-  return f.processed !== 'any' || f.consultation !== 'any' || f.min_score !== '';
+  return f.processed !== 'any' || f.consultation !== 'any' || f.min_score !== '' || f.starred !== 'any';
 }
 
 export default function Sidebar({ selectedId, onSelect, refreshTrigger }: SidebarProps) {
@@ -45,6 +46,7 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
       if (appliedFilters.processed !== 'any') params.set('processed', appliedFilters.processed);
       if (appliedFilters.consultation !== 'any') params.set('consultation', appliedFilters.consultation);
       if (appliedFilters.min_score !== '') params.set('min_score', appliedFilters.min_score);
+      if (appliedFilters.starred !== 'any') params.set('starred', appliedFilters.starred);
     }
 
     try {
@@ -76,6 +78,22 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
   const clearFilters = () => {
     setFilters(DEFAULT_FILTERS);
     setAppliedFilters(DEFAULT_FILTERS);
+  };
+
+  const handleStar = async (e: React.MouseEvent, article: Article) => {
+    e.stopPropagation();
+    const newStarred = !article.starred;
+    setArticles(prev => prev.map(a => a.id === article.id ? { ...a, starred: newStarred } : a));
+    try {
+      await fetchJSON(`/api/articles/${article.id}/star`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ starred: newStarred }),
+      });
+    } catch (e) {
+      console.error("Failed to star article", e);
+      setArticles(prev => prev.map(a => a.id === article.id ? { ...a, starred: article.starred } : a));
+    }
   };
 
   const hasMore = !currentSearch && offset < total;
@@ -149,6 +167,19 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
               />
             </div>
 
+            <div className="filter-row">
+              <label className="filter-label">Starred</label>
+              <select
+                className="filter-select"
+                value={filters.starred}
+                onChange={e => setFilters(f => ({ ...f, starred: e.target.value as ArticleFilters['starred'] }))}
+              >
+                <option value="any">Any</option>
+                <option value="yes">Starred</option>
+                <option value="no">Not starred</option>
+              </select>
+            </div>
+
             <div className="filter-actions">
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={applyFilters}>
                 Apply
@@ -179,8 +210,8 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
         )}
 
         {articles.map(a => (
-          <div 
-            key={a.id} 
+          <div
+            key={a.id}
             className={`article-item animate-fade-in ${a.id === selectedId ? 'active' : ''}`}
             onClick={() => onSelect(a.id)}
           >
@@ -200,6 +231,13 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
                   <span>{a.author}</span>
                 </div>
               )}
+              <button
+                className={`star-btn ${a.starred ? 'starred' : ''}`}
+                onClick={e => handleStar(e, a)}
+                aria-label={a.starred ? 'Unstar' : 'Star'}
+              >
+                <Star size={14} fill={a.starred ? 'currentColor' : 'none'} />
+              </button>
             </div>
           </div>
         ))}

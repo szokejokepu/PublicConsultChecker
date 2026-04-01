@@ -22,9 +22,12 @@ CREATE TABLE IF NOT EXISTS articles (
     date        TEXT,
     content     TEXT,
     source_url  TEXT,
-    scraped_at  TEXT    NOT NULL
+    scraped_at  TEXT    NOT NULL,
+    starred     INTEGER NOT NULL DEFAULT 0
 )
 """
+
+MIGRATE_STARRED = "ALTER TABLE articles ADD COLUMN starred INTEGER NOT NULL DEFAULT 0"
 
 CREATE_FTS = """
 CREATE VIRTUAL TABLE IF NOT EXISTS articles_fts
@@ -63,6 +66,7 @@ class Article:
     content: str | None
     source_url: str | None
     scraped_at: str
+    starred: bool = False
 
 
 class ArticleDB:
@@ -96,6 +100,10 @@ class ArticleDB:
             conn.execute(CREATE_TABLE)
             conn.execute(CREATE_FTS)
             conn.execute(CREATE_ANALYSIS_TABLE)
+            try:
+                conn.execute(MIGRATE_STARRED)
+            except sqlite3.OperationalError:
+                pass  # column already exists
 
     # ------------------------------------------------------------------
     # Write
@@ -127,6 +135,15 @@ class ArticleDB:
                 return row_id
             except sqlite3.IntegrityError:
                 return None  # already exists
+
+    def set_starred(self, article_id: int, starred: bool) -> bool:
+        """Set starred status. Returns True if the article exists."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE articles SET starred = ? WHERE id = ?",
+                (int(starred), article_id),
+            )
+        return cur.rowcount > 0
 
     def delete_article(self, article_id: int) -> bool:
         """Delete by id. Returns True if a row was removed."""
@@ -249,6 +266,7 @@ class ArticleDB:
         processed: str = "any",       # "any" | "yes" | "no"
         consultation: str = "any",    # "any" | "yes" | "no" | "unclassified"
         min_score: float | None = None,
+        starred: str = "any",         # "any" | "yes" | "no"
     ) -> tuple[list[Article], int]:
         """List articles with optional analysis filters, returns (articles, total)."""
         conditions: list[str] = []
@@ -271,6 +289,11 @@ class ArticleDB:
         if min_score is not None:
             conditions.append("aa.classifier_score >= ?")
             params.append(min_score)
+
+        if starred == "yes":
+            conditions.append("articles.starred = 1")
+        elif starred == "no":
+            conditions.append("articles.starred = 0")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
@@ -313,6 +336,7 @@ def _row_to_article(row: sqlite3.Row) -> Article:
         content=row["content"],
         source_url=row["source_url"],
         scraped_at=row["scraped_at"],
+        starred=bool(row["starred"]),
     )
 
 
