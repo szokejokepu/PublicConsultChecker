@@ -15,6 +15,7 @@ class AnalysisOut(BaseModel):
     extracted_place: str | None
     extracted_subject: str | None
     processed_at: str
+    notified_at: str | None = None
 
 
 class ArticleOut(BaseModel):

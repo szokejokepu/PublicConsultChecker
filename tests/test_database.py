@@ -246,6 +246,72 @@ class TestFilterArticles:
         assert articles[0].id == id1
 
 
+class TestSetNotified:
+    def test_defaults_to_not_notified(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id))
+        analysis = db.get_analysis(row_id)
+        assert analysis.notified_at is None
+
+    def test_set_notified_stamps_timestamp(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id))
+        ts = "2026-04-02T08:00:00"
+        assert db.set_notified(row_id, ts) is True
+        assert db.get_analysis(row_id).notified_at == ts
+
+    def test_set_notified_unknown_article_returns_false(self, db):
+        assert db.set_notified(9999, "2026-04-02T08:00:00") is False
+
+    def test_does_not_affect_other_analysis_rows(self, db):
+        id1 = _save(db, url="https://example.com/a")
+        id2 = _save(db, url="https://example.com/b")
+        db.save_analysis(_make_analysis(id1))
+        db.save_analysis(_make_analysis(id2))
+        db.set_notified(id1, "2026-04-02T08:00:00")
+        assert db.get_analysis(id2).notified_at is None
+
+
+class TestListUnnotifiedConsultations:
+    def test_empty_when_no_articles(self, db):
+        assert db.list_unnotified_consultations() == []
+
+    def test_returns_unnotified_consultation(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id, is_public_consultation=True))
+        results = db.list_unnotified_consultations()
+        assert len(results) == 1
+        assert results[0].id == row_id
+
+    def test_excludes_already_notified(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id, is_public_consultation=True))
+        db.set_notified(row_id, "2026-04-02T08:00:00")
+        assert db.list_unnotified_consultations() == []
+
+    def test_excludes_non_consultation(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id, is_public_consultation=False))
+        assert db.list_unnotified_consultations() == []
+
+    def test_excludes_unclassified(self, db):
+        row_id = _save(db)
+        db.save_analysis(_make_analysis(row_id, is_public_consultation=None, keyword_matched=False))
+        assert db.list_unnotified_consultations() == []
+
+    def test_returns_only_unnotified_when_mixed(self, db):
+        id1 = _save(db, url="https://example.com/a")
+        id2 = _save(db, url="https://example.com/b")
+        id3 = _save(db, url="https://example.com/c")
+        db.save_analysis(_make_analysis(id1, is_public_consultation=True))
+        db.save_analysis(_make_analysis(id2, is_public_consultation=True))
+        db.save_analysis(_make_analysis(id3, is_public_consultation=False))
+        db.set_notified(id1, "2026-04-02T08:00:00")
+        results = db.list_unnotified_consultations()
+        assert len(results) == 1
+        assert results[0].id == id2
+
+
 class TestGetStats:
     def test_empty(self, db):
         stats = db.get_stats()

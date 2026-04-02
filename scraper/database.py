@@ -51,9 +51,12 @@ CREATE TABLE IF NOT EXISTS article_analysis (
     extracted_time          TEXT,
     extracted_place         TEXT,
     extracted_subject       TEXT,
-    processed_at            TEXT NOT NULL
+    processed_at            TEXT NOT NULL,
+    notified_at             TEXT
 )
 """
+
+MIGRATE_NOTIFIED_AT = "ALTER TABLE article_analysis ADD COLUMN notified_at TEXT"
 
 
 @dataclass
@@ -100,10 +103,11 @@ class ArticleDB:
             conn.execute(CREATE_TABLE)
             conn.execute(CREATE_FTS)
             conn.execute(CREATE_ANALYSIS_TABLE)
-            try:
-                conn.execute(MIGRATE_STARRED)
-            except sqlite3.OperationalError:
-                pass  # column already exists
+            for migration in (MIGRATE_STARRED, MIGRATE_NOTIFIED_AT):
+                try:
+                    conn.execute(migration)
+                except sqlite3.OperationalError:
+                    pass  # column already exists
 
     # ------------------------------------------------------------------
     # Write
@@ -309,6 +313,30 @@ class ArticleDB:
 
         return [_row_to_article(r) for r in rows], total
 
+    def set_notified(self, article_id: int, notified_at: str) -> bool:
+        """Stamp an analysis row as notified. Returns True if the row exists."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                "UPDATE article_analysis SET notified_at = ? WHERE article_id = ?",
+                (notified_at, article_id),
+            )
+        return cur.rowcount > 0
+
+    def list_unnotified_consultations(self) -> list[Article]:
+        """Return articles classified as public consultations that have not been notified yet."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT articles.*
+                FROM articles
+                JOIN article_analysis aa ON articles.id = aa.article_id
+                WHERE aa.is_public_consultation = 1
+                  AND aa.notified_at IS NULL
+                ORDER BY articles.scraped_at ASC
+                """,
+            ).fetchall()
+        return [_row_to_article(r) for r in rows]
+
     def list_unprocessed(self, limit: int = 32) -> list[Article]:
         """Return articles that have no entry in article_analysis."""
         with self._conn() as conn:
@@ -354,4 +382,5 @@ def _row_to_analysis(row: sqlite3.Row):
         extracted_place=row["extracted_place"],
         extracted_subject=row["extracted_subject"],
         processed_at=row["processed_at"],
+        notified_at=row["notified_at"],
     )

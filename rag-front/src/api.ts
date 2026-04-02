@@ -24,6 +24,7 @@ export interface Analysis {
   extracted_place: string | null;
   extracted_subject: string | null;
   processed_at: string;
+  notified_at: string | null;
 }
 
 export interface Article {

@@ -217,6 +217,9 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
           >
             <div className="article-item-title" title={a.title || a.url}>
               {a.title || a.url}
+              {a.analysis?.notified_at && (
+                <span className="notified-dot" title={`Notified ${new Date(a.analysis.notified_at).toLocaleString()}`} />
+              )}
             </div>
             <div className="article-item-meta">
               {a.date && (

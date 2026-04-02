@@ -218,6 +218,14 @@ function AnalysisPanel({ analysis }: { analysis: Analysis | null }) {
           </div>
         )}
 
+        <div className="analysis-row">
+          <span className="analysis-label">Notification</span>
+          {analysis.notified_at
+            ? <span className="analysis-badge analysis-badge--positive">Sent {new Date(analysis.notified_at).toLocaleString()}</span>
+            : <span className="analysis-badge analysis-badge--neutral">Not yet sent</span>
+          }
+        </div>
+
         <div className="analysis-footer">
           Processed: {new Date(analysis.processed_at).toLocaleString()}
         </div>

@@ -17,3 +17,4 @@ class AnalysisResult:
     extracted_place: str | None
     extracted_subject: str | None
     processed_at: str
+    notified_at: str | None = None
