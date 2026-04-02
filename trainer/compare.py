@@ -1,19 +1,21 @@
-"""Compare Ollama baseline vs fine-tuned BERT on human-reviewed records.
+"""Compare four classifiers on human-reviewed ground-truth records.
 
-Only records with ``"reviewed": true`` are used — those are the ones where a
-human confirmed or corrected the label, so they are the ground truth.
+Only records with ``"reviewed": true`` are used as ground truth.
 
-For each reviewed record:
-  - true label  = current ``label`` field (post-correction)
-  - Ollama pred = ``original_label`` if the record was flipped, else ``label``
-                  (i.e., what Ollama originally said)
-  - BERT pred   = inference result from the fine-tuned model
+Methods compared
+----------------
+1. Keyword filter        — exact string match on Romanian consultation keywords
+2. Cosine similarity     — mean cosine score against positive reference sentences
+                           using the base Romanian BERT (no fine-tuning)
+3. Ollama (LLM baseline) — what the LLM originally predicted before human review
+4. Fine-tuned BERT       — the model produced by finetune.py
 
 Usage
 -----
     python -m trainer.compare
     python -m trainer.compare --model-dir trainer/output/consultation_classifier
-    python -m trainer.compare --input trainer/data/labels.jsonl
+    python -m trainer.compare --cosine-threshold 0.65
+    python -m trainer.compare --skip-cosine   # faster, skips the slow embedding pass
 """
 
 from __future__ import annotations
@@ -26,6 +28,11 @@ import click
 _INPUT_DEFAULT = str(Path(__file__).parent / "data" / "labels.jsonl")
 _MODEL_DEFAULT = str(Path(__file__).parent / "output" / "consultation_classifier")
 _MAX_CHARS = 4000
+
+
+# ---------------------------------------------------------------------------
+# Data helpers
+# ---------------------------------------------------------------------------
 
 
 def _load_reviewed(path: Path) -> list[dict]:
@@ -56,9 +63,14 @@ def _make_text(record: dict) -> str:
     return combined[:_MAX_CHARS]
 
 
+# ---------------------------------------------------------------------------
+# Metrics
+# ---------------------------------------------------------------------------
+
+
 def _metrics(true: list[int], pred: list[int]) -> dict:
     from sklearn.metrics import (  # type: ignore
-        accuracy_score, f1_score, precision_score, recall_score, confusion_matrix
+        accuracy_score, f1_score, precision_score, recall_score, confusion_matrix,
     )
     return {
         "accuracy": accuracy_score(true, pred),
@@ -70,20 +82,75 @@ def _metrics(true: list[int], pred: list[int]) -> dict:
 
 
 def _print_metrics(name: str, m: dict) -> None:
-    click.echo(f"\n{'─' * 40}")
+    click.echo(f"\n{'─' * 44}")
     click.echo(click.style(f"  {name}", bold=True))
-    click.echo(f"{'─' * 40}")
+    click.echo(f"{'─' * 44}")
     click.echo(f"  Accuracy  : {m['accuracy']:.3f}")
     click.echo(f"  Precision : {m['precision']:.3f}")
     click.echo(f"  Recall    : {m['recall']:.3f}")
     click.echo(f"  F1        : {m['f1']:.3f}")
-    tn, fp, fn, tp = (
-        m["confusion_matrix"][0][0],
-        m["confusion_matrix"][0][1],
-        m["confusion_matrix"][1][0],
-        m["confusion_matrix"][1][1],
-    )
+    tn = m["confusion_matrix"][0][0]
+    fp = m["confusion_matrix"][0][1]
+    fn = m["confusion_matrix"][1][0]
+    tp = m["confusion_matrix"][1][1]
     click.echo(f"  Confusion : TP={tp}  FP={fp}  FN={fn}  TN={tn}")
+
+
+def _delta_line(label: str, val: float) -> None:
+    color = "green" if val >= 0 else "red"
+    click.echo(f"  {label:<12}: {click.style(f'{val:+.3f}', fg=color)}")
+
+
+# ---------------------------------------------------------------------------
+# Classifiers
+# ---------------------------------------------------------------------------
+
+
+def _keyword_preds(records: list[dict]) -> list[int]:
+    from pipeline.keyword_filter import keyword_filter  # type: ignore
+    preds = []
+    for r in records:
+        text = _make_text(r).lower()
+        matched, _ = keyword_filter(text)
+        preds.append(1 if matched else 0)
+    return preds
+
+
+def _cosine_preds(records: list[dict], threshold: float) -> list[int]:
+    from pipeline.classifier import classify  # type: ignore
+    preds = []
+    total = len(records)
+    for i, r in enumerate(records, 1):
+        text = _make_text(r)
+        is_pos, _ = classify(text, threshold=threshold)
+        preds.append(1 if is_pos else 0)
+        if i % 10 == 0 or i == total:
+            click.echo(f"  cosine: {i}/{total}", nl=False)
+            click.echo("\r", nl=False)
+    click.echo(" " * 30 + "\r", nl=False)  # clear line
+    return preds
+
+
+def _bert_preds(records: list[dict], model_path: Path, batch_size: int) -> list[int]:
+    from transformers import pipeline  # type: ignore
+    clf = pipeline(
+        "text-classification",
+        model=str(model_path),
+        tokenizer=str(model_path),
+        truncation=True,
+        max_length=256,
+        batch_size=batch_size,
+        device=-1,
+    )
+    texts = [_make_text(r) for r in records]
+    results = clf(texts)
+    label2id = {"PRESS_RELEASE": 0, "PUBLIC_CONSULTATION": 1}
+    return [label2id.get(r["label"], int(r["label"] == "LABEL_1")) for r in results]
+
+
+# ---------------------------------------------------------------------------
+# CLI
+# ---------------------------------------------------------------------------
 
 
 @click.command()
@@ -92,17 +159,27 @@ def _print_metrics(name: str, m: dict) -> None:
 @click.option("--model-dir", default=_MODEL_DEFAULT, show_default=True,
               metavar="PATH", help="Directory of the fine-tuned BERT model.")
 @click.option("--batch-size", default=16, show_default=True, type=int,
-              help="Batch size for BERT inference.")
-def main(input_path: str, model_dir: str, batch_size: int) -> None:
-    """Compare Ollama vs fine-tuned BERT against human-reviewed ground truth."""
+              help="Batch size for fine-tuned BERT inference.")
+@click.option("--cosine-threshold", default=0.65, show_default=True, type=float,
+              help="Decision threshold for the cosine similarity classifier.")
+@click.option("--skip-cosine", is_flag=True, default=False,
+              help="Skip the cosine similarity step (slow on CPU for large sets).")
+@click.option("--skip-bert", is_flag=True, default=False,
+              help="Skip the fine-tuned BERT step.")
+def main(
+    input_path: str,
+    model_dir: str,
+    batch_size: int,
+    cosine_threshold: float,
+    skip_cosine: bool,
+    skip_bert: bool,
+) -> None:
+    """Compare keyword / cosine / Ollama / fine-tuned BERT classifiers."""
 
     try:
-        from transformers import pipeline  # type: ignore
         from sklearn.metrics import accuracy_score  # type: ignore  # noqa: F401
     except ImportError:
-        raise click.ClickException(
-            "Missing dependencies. Run:\n  pip install transformers torch scikit-learn"
-        )
+        raise click.ClickException("Run: pip install scikit-learn")
 
     path = Path(input_path)
     if not path.exists():
@@ -113,59 +190,67 @@ def main(input_path: str, model_dir: str, batch_size: int) -> None:
         raise click.ClickException("No reviewed records found. Run review_dataset.py first.")
 
     flipped = sum(1 for r in records if "original_label" in r)
-    click.echo(f"Reviewed records : {len(records)}")
+    pos = sum(1 for r in records if r["label"] == 1)
+    click.echo(f"Reviewed records : {len(records)}  (label=1: {pos}, label=0: {len(records)-pos})")
     click.echo(f"Human-flipped    : {flipped}")
 
     true_labels = [r["label"] for r in records]
+
+    # ---- keyword -----------------------------------------------------------
+    click.echo("\nRunning keyword filter…")
+    kw_preds = _keyword_preds(records)
+
+    # ---- cosine ------------------------------------------------------------
+    if not skip_cosine:
+        click.echo(f"Running cosine similarity (threshold={cosine_threshold})…")
+        cosine_preds = _cosine_preds(records, cosine_threshold)
+    else:
+        cosine_preds = None
+
+    # ---- Ollama ------------------------------------------------------------
     ollama_preds = [_ollama_pred(r) for r in records]
 
-    # ---- BERT inference ---------------------------------------------------
-    model_path = Path(model_dir)
-    if not model_path.exists():
-        raise click.ClickException(
-            f"Model not found at {model_path}. Run finetune.py first."
-        )
+    # ---- fine-tuned BERT ---------------------------------------------------
+    if not skip_bert:
+        model_path = Path(model_dir)
+        if not model_path.exists():
+            raise click.ClickException(
+                f"Fine-tuned model not found at {model_path}. "
+                "Run finetune.py first, or use --skip-bert."
+            )
+        click.echo(f"Running fine-tuned BERT from {model_path}…")
+        bert_preds = _bert_preds(records, model_path, batch_size)
+    else:
+        bert_preds = None
 
-    click.echo(f"\nLoading BERT model from {model_path}…")
-    clf = pipeline(
-        "text-classification",
-        model=str(model_path),
-        tokenizer=str(model_path),
-        truncation=True,
-        max_length=256,
-        batch_size=batch_size,
-        device=-1,  # CPU; set to 0 for GPU
-    )
-
-    click.echo("Running BERT inference…")
-    texts = [_make_text(r) for r in records]
-    results = clf(texts)
-
-    label2id = {"PRESS_RELEASE": 0, "PUBLIC_CONSULTATION": 1}
-    bert_preds = [label2id.get(r["label"], int(r["label"] == "LABEL_1")) for r in results]
-
-    # ---- report -----------------------------------------------------------
+    # ---- report ------------------------------------------------------------
+    kw_m = _metrics(true_labels, kw_preds)
+    cosine_m = _metrics(true_labels, cosine_preds) if cosine_preds is not None else None
     ollama_m = _metrics(true_labels, ollama_preds)
-    bert_m = _metrics(true_labels, bert_preds)
+    bert_m = _metrics(true_labels, bert_preds) if bert_preds is not None else None
 
-    click.echo(f"\n{'═' * 40}")
+    click.echo(f"\n{'═' * 44}")
     click.echo(click.style("  CLASSIFICATION COMPARISON", bold=True))
     click.echo(f"  Ground truth: {len(records)} human-reviewed articles")
-    click.echo(f"{'═' * 40}")
+    click.echo(f"{'═' * 44}")
 
-    _print_metrics("Ollama (llama3.1:8b baseline)", ollama_m)
-    _print_metrics("Fine-tuned BERT", bert_m)
+    _print_metrics("1. Keyword filter", kw_m)
+    if cosine_m:
+        _print_metrics(f"2. Cosine similarity (≥{cosine_threshold})", cosine_m)
+    _print_metrics("3. Ollama (llama3.1:8b)", ollama_m)
+    if bert_m:
+        _print_metrics("4. Fine-tuned BERT", bert_m)
 
-    # ---- delta summary ----------------------------------------------------
-    click.echo(f"\n{'─' * 40}")
-    delta_acc = bert_m["accuracy"] - ollama_m["accuracy"]
-    delta_f1 = bert_m["f1"] - ollama_m["f1"]
-    acc_color = "green" if delta_acc >= 0 else "red"
-    f1_color = "green" if delta_f1 >= 0 else "red"
-    click.echo("  Delta (BERT − Ollama):")
-    click.echo(f"  Accuracy : {click.style(f'{delta_acc:+.3f}', fg=acc_color)}")
-    click.echo(f"  F1       : {click.style(f'{delta_f1:+.3f}', fg=f1_color)}")
-    click.echo(f"{'─' * 40}\n")
+    # ---- delta vs Ollama --------------------------------------------------
+    click.echo(f"\n{'─' * 44}")
+    click.echo(click.style("  Delta vs Ollama (F1 / Accuracy)", bold=True))
+    click.echo(f"{'─' * 44}")
+    _delta_line("Keyword", kw_m["f1"] - ollama_m["f1"])
+    if cosine_m:
+        _delta_line("Cosine", cosine_m["f1"] - ollama_m["f1"])
+    if bert_m:
+        _delta_line("Fine-tuned", bert_m["f1"] - ollama_m["f1"])
+    click.echo(f"{'─' * 44}\n")
 
 
 if __name__ == "__main__":
