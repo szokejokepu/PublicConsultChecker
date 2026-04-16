@@ -84,3 +84,5 @@ fabric.properties
 *.db
 __pychache__
 *.pyc
+# Environment variables
+.env
