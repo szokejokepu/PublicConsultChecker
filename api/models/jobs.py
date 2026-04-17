@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from scraper.config import DEFAULT_ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS
+from scraper.config import (
+    DEFAULT_ARTICLE_LINK_SELECTOR,
+    DEFAULT_PAGE_PREFIX,
+    DEFAULT_PAGE_SEPARATOR,
+    DEFAULT_PAGE_SUFFIX,
+    DEFAULT_WORKERS,
+)
 
 
 class ScrapeRequest(BaseModel):
@@ -12,6 +18,9 @@ class ScrapeRequest(BaseModel):
     selector: str = DEFAULT_ARTICLE_LINK_SELECTOR
     max_pages: int | None = None
     workers: int = Field(default=DEFAULT_WORKERS, ge=1, le=32)
+    page_separator: str = DEFAULT_PAGE_SEPARATOR
+    page_prefix: str = DEFAULT_PAGE_PREFIX
+    page_suffix: str = DEFAULT_PAGE_SUFFIX
 
 
 class ProcessRequest(BaseModel):

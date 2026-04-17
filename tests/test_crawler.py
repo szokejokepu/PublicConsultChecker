@@ -5,6 +5,7 @@ from unittest.mock import patch
 import pytest
 
 from scraper.crawler import find_article_links, page_url, crawl_paginated
+from scraper.config import ScrapeConfig
 from scraper.database import ArticleDB
 
 BASE_URL = "https://example.com/stiri"
@@ -58,6 +59,40 @@ def db():
 
 
 # ---------------------------------------------------------------------------
+# ScrapeConfig
+# ---------------------------------------------------------------------------
+
+class TestScrapeConfig:
+    def test_defaults(self):
+        cfg = ScrapeConfig(url="https://example.com")
+        assert cfg.page_separator == "-"
+        assert cfg.page_prefix == "page"
+        assert cfg.page_suffix == "/"
+
+    def test_from_dict_defaults_when_keys_absent(self):
+        cfg = ScrapeConfig.from_dict({"url": "https://example.com"})
+        assert cfg.page_separator == "-"
+        assert cfg.page_prefix == "page"
+        assert cfg.page_suffix == "/"
+
+    def test_from_dict_custom_pagination(self):
+        cfg = ScrapeConfig.from_dict({
+            "url": "https://example.com",
+            "page_separator": "/",
+            "page_prefix": "",
+            "page_suffix": "",
+        })
+        assert cfg.page_separator == "/"
+        assert cfg.page_prefix == ""
+        assert cfg.page_suffix == ""
+
+    def test_from_dict_rejects_unknown_keys(self):
+        import pytest
+        with pytest.raises(ValueError, match="Unknown config keys"):
+            ScrapeConfig.from_dict({"url": "https://example.com", "bogus": 1})
+
+
+# ---------------------------------------------------------------------------
 # find_article_links
 # ---------------------------------------------------------------------------
 
@@ -102,6 +137,8 @@ class TestFindArticleLinks:
 # ---------------------------------------------------------------------------
 
 class TestPageUrl:
+    # --- default format (separator="-", prefix="page", suffix="/") ----------
+
     def test_page_1_adds_trailing_slash(self):
         assert page_url("https://example.com/stiri", 1) == "https://example.com/stiri/"
 
@@ -116,6 +153,39 @@ class TestPageUrl:
 
     def test_page_10(self):
         assert page_url("https://example.com/stiri", 10) == "https://example.com/stiri-page10/"
+
+    # --- path-style: base/N ------------------------------------------------
+
+    def test_path_style_page_1(self):
+        # separator="/", prefix="", suffix="" → page 1 = bare base
+        assert page_url("https://example.com/stiri", 1, "/", "", "") == "https://example.com/stiri"
+
+    def test_path_style_page_2(self):
+        assert page_url("https://example.com/stiri", 2, "/", "", "") == "https://example.com/stiri/2"
+
+    def test_path_style_page_10(self):
+        assert page_url("https://example.com/stiri", 10, "/", "", "") == "https://example.com/stiri/10"
+
+    def test_path_style_strips_trailing_slash_on_base(self):
+        # existing trailing slash on base should not produce double slash
+        assert page_url("https://example.com/stiri/", 2, "/", "", "") == "https://example.com/stiri/2"
+
+    # --- query-string style: base?page=N -----------------------------------
+
+    def test_query_style_page_1(self):
+        assert page_url("https://example.com/stiri", 1, "?page=", "", "") == "https://example.com/stiri"
+
+    def test_query_style_page_2(self):
+        assert page_url("https://example.com/stiri", 2, "?page=", "", "") == "https://example.com/stiri?page=2"
+
+    # --- custom prefix and suffix ------------------------------------------
+
+    def test_custom_prefix_and_suffix(self):
+        # separator="/", prefix="p", suffix=".html"
+        assert page_url("https://example.com/news", 3, "/", "p", ".html") == "https://example.com/news/p3.html"
+
+    def test_custom_page_1_uses_suffix_only(self):
+        assert page_url("https://example.com/news", 1, "/", "p", ".html") == "https://example.com/news.html"
 
 
 # ---------------------------------------------------------------------------
@@ -317,6 +387,33 @@ class TestCrawlPaginated:
         assert summary["saved"] == n
         assert summary["failed"] == 0
         assert db.get_stats()["total_articles"] == n
+
+    def test_path_style_pagination(self, db):
+        """crawl_paginated with path-style URLs (base/2, base/3, …)."""
+        base = "https://example.com/news"
+        pages = {
+            f"{base}": LISTING_HTML,
+            "https://example.com/article/1": make_article_html("First"),
+            "https://example.com/article/2": make_article_html("Second"),
+            f"{base}/2": """
+                <html><body>
+                  <div class="comunicate_presa_right">
+                    <h2><a href="/article/3">Third Article</a></h2>
+                  </div>
+                </body></html>
+            """,
+            "https://example.com/article/3": make_article_html("Third"),
+            f"{base}/3": EMPTY_LISTING_HTML,
+        }
+
+        with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
+            summary = crawl_paginated(
+                base, db,
+                page_separator="/", page_prefix="", page_suffix="",
+                verbose=False,
+            )
+
+        assert summary["saved"] == 3
 
     def test_parallel_same_result_as_sequential(self, db):
         # Results with max_workers=1 and max_workers=4 must be identical

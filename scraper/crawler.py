@@ -8,7 +8,13 @@ from urllib.parse import urljoin
 import requests
 from bs4 import BeautifulSoup
 
-from .config import DEFAULT_ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS
+from .config import (
+    DEFAULT_ARTICLE_LINK_SELECTOR,
+    DEFAULT_PAGE_PREFIX,
+    DEFAULT_PAGE_SEPARATOR,
+    DEFAULT_PAGE_SUFFIX,
+    DEFAULT_WORKERS,
+)
 from .database import ArticleDB
 from .extractor import extract_article, fetch_html
 
@@ -38,18 +44,32 @@ def find_article_links(html: str, base_url: str, selector: str = DEFAULT_ARTICLE
     return links
 
 
-def page_url(base_url: str, page: int) -> str:
-    """
-    Build the URL for a given page number, always ending with /.
+def page_url(
+    base_url: str,
+    page: int,
+    separator: str = DEFAULT_PAGE_SEPARATOR,
+    prefix: str = DEFAULT_PAGE_PREFIX,
+    suffix: str = DEFAULT_PAGE_SUFFIX,
+) -> str:
+    """Build the URL for a given page number.
 
-    Page 1 → base_url/
-    Page 2 → base_url-page2/
-    Page N → base_url-pageN/
+    Page 1 always returns ``base_url`` with the *suffix* appended (no
+    separator or prefix).  For subsequent pages the format is::
+
+        base_url.rstrip("/") + separator + prefix + str(page) + suffix
+
+    Default (matches legacy behaviour):
+        Page 1 → ``https://example.com/stiri/``
+        Page N → ``https://example.com/stiri-pageN/``
+
+    Example — path-style pagination (separator="/", prefix="", suffix=""):
+        Page 1 → ``https://example.com/stiri``
+        Page 2 → ``https://example.com/stiri/2``
     """
     base = base_url.rstrip("/")
     if page == 1:
-        return f"{base}/"
-    return f"{base}-page{page}/"
+        return f"{base}{suffix}"
+    return f"{base}{separator}{prefix}{page}{suffix}"
 
 
 def _fetch_and_extract(link: str, source_url: str) -> dict | None:
@@ -79,14 +99,20 @@ def crawl_paginated(
     selector: str = DEFAULT_ARTICLE_LINK_SELECTOR,
     max_pages: int | None = None,
     max_workers: int = DEFAULT_WORKERS,
+    page_separator: str = DEFAULT_PAGE_SEPARATOR,
+    page_prefix: str = DEFAULT_PAGE_PREFIX,
+    page_suffix: str = DEFAULT_PAGE_SUFFIX,
     verbose: bool = True,
 ) -> dict[str, int]:
     """
     Crawl a paginated listing and save every article found.
 
-    Iterates pages (base_url, base_url-page2, base_url-page3, …) until a page
-    returns no article links or *max_pages* is reached.  Articles on each page
-    are fetched in parallel using *max_workers* threads.
+    Iterates pages until a page returns no article links or *max_pages* is
+    reached.  Articles on each page are fetched in parallel using *max_workers*
+    threads.
+
+    The URL for each page is built by :func:`page_url` using *page_separator*,
+    *page_prefix*, and *page_suffix* (see that function for details).
 
     Returns {"saved": N, "skipped": N, "failed": N}.
     """
@@ -95,7 +121,7 @@ def crawl_paginated(
     page = 1
 
     while max_pages is None or page <= max_pages:
-        listing_url = page_url(base_url, page)
+        listing_url = page_url(base_url, page, page_separator, page_prefix, page_suffix)
 
         if verbose:
             print(f"[page {page}] {listing_url}")

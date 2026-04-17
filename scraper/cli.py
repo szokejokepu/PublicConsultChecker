@@ -94,7 +94,16 @@ def scrape(
 
     db: ArticleDB = ctx.obj["db"]
     click.echo(f"Crawling {url!r}  (selector={selector!r}, max_pages={max_pages or 'unlimited'}, workers={workers})")
-    summary = crawl_paginated(url, db, selector=selector, max_pages=max_pages, max_workers=workers, verbose=not quiet)
+    summary = crawl_paginated(
+        url, db,
+        selector=selector,
+        max_pages=max_pages,
+        max_workers=workers,
+        page_separator=cfg.page_separator,
+        page_prefix=cfg.page_prefix,
+        page_suffix=cfg.page_suffix,
+        verbose=not quiet,
+    )
     click.echo(
         f"\nDone — saved: {summary['saved']}, "
         f"skipped/duplicates: {summary['skipped']}, "

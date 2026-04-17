@@ -21,6 +21,9 @@ def _run_scrape(job_id: str, req: ScrapeRequest) -> None:
             selector=req.selector,
             max_pages=req.max_pages,
             max_workers=req.workers,
+            page_separator=req.page_separator,
+            page_prefix=req.page_prefix,
+            page_suffix=req.page_suffix,
             verbose=False,
         )
         registry.update(job_id, JobStatus.DONE, summary=summary)
