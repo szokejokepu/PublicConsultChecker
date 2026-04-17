@@ -86,3 +86,4 @@ __pychache__
 *.pyc
 # Environment variables
 .env
+trainer/output/*
