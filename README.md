@@ -108,6 +108,26 @@ uvicorn api.app:app --reload
 
 The frontend is served at `http://localhost:8000/`. Interactive API docs are at `http://localhost:8000/docs`.
 
+### React Frontend — `rag-front/`
+
+A React + TypeScript frontend (Vite). Proxies `/api` to the FastAPI backend at `localhost:8000`.
+
+**Prerequisites:** Node.js 18+
+
+```bash
+cd rag-front
+npm install
+npm run dev
+```
+
+Opens at `http://localhost:5173/`. Start the API server first.
+
+**Build for production:**
+
+```bash
+npm run build   # outputs to rag-front/dist/
+```
+
 **Endpoints:**
 
 | Method | Path | Description |
@@ -232,6 +252,7 @@ python -m trainer.compare --skip-cosine   # faster, skips embedding pass
 ├── pipeline/                # NLP pipeline (keyword filter → BERT classifier → NER)
 ├── api/                     # FastAPI REST API + job queue
 ├── frontend/                # Static HTML frontend
+├── rag-front/               # React + TypeScript frontend (Vite)
 ├── notifier/                # Email notification module
 └── trainer/                 # Dataset creation, labeling, fine-tuning, evaluation
     └── data/labels.jsonl    # Ollama-generated labels (fine-tuning input)
