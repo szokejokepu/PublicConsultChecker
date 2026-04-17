@@ -50,6 +50,8 @@ export interface ArticleFilters {
   consultation: 'any' | 'yes' | 'no' | 'unclassified';
   min_score: string;
   starred: 'any' | 'yes' | 'no';
+  sort_by: 'scraped_at' | 'date';
+  sort_order: 'asc' | 'desc';
 }
 
 export interface StatsOut {

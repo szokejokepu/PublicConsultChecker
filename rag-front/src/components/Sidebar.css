@@ -250,6 +250,19 @@
   color: var(--text-muted);
 }
 
+.sort-row {
+  font-size: 0.85rem;
+}
+
+.sort-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.sort-select {
+  flex: 1;
+}
+
 .notified-dot {
   display: inline-block;
   width: 7px;

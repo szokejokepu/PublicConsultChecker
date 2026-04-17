@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { Search, Calendar, User, FileX2, SlidersHorizontal, X, Star } from 'lucide-react';
+import { Search, Calendar, User, FileX2, SlidersHorizontal, X, Star, ArrowUpDown } from 'lucide-react';
 import './Sidebar.css';
 import { fetchJSON } from '../api';
 import type { Article, ArticleFilters, ArticleListOut } from '../api';
@@ -18,6 +18,8 @@ const DEFAULT_FILTERS: ArticleFilters = {
   consultation: 'any',
   min_score: '',
   starred: 'any',
+  sort_by: 'scraped_at',
+  sort_order: 'desc',
 };
 
 function filtersActive(f: ArticleFilters) {
@@ -47,6 +49,8 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
       if (appliedFilters.consultation !== 'any') params.set('consultation', appliedFilters.consultation);
       if (appliedFilters.min_score !== '') params.set('min_score', appliedFilters.min_score);
       if (appliedFilters.starred !== 'any') params.set('starred', appliedFilters.starred);
+      params.set('sort_by', appliedFilters.sort_by);
+      params.set('sort_order', appliedFilters.sort_order);
     }
 
     try {
@@ -123,6 +127,35 @@ export default function Sidebar({ selectedId, onSelect, refreshTrigger }: Sideba
             <SlidersHorizontal size={16} />
           </button>
         </div>
+
+        {!currentSearch && (
+          <div className="toolbar-row sort-row">
+            <ArrowUpDown size={14} className="sort-icon" />
+            <select
+              className="filter-select sort-select"
+              value={appliedFilters.sort_by}
+              onChange={e => {
+                const val = e.target.value as ArticleFilters['sort_by'];
+                setFilters(f => ({ ...f, sort_by: val }));
+                setAppliedFilters(f => ({ ...f, sort_by: val }));
+              }}
+            >
+              <option value="scraped_at">Scraped date</option>
+              <option value="date">Article date</option>
+            </select>
+            <button
+              className="filter-toggle-btn"
+              title={appliedFilters.sort_order === 'desc' ? 'Descending' : 'Ascending'}
+              onClick={() => {
+                const next = appliedFilters.sort_order === 'desc' ? 'asc' : 'desc';
+                setFilters(f => ({ ...f, sort_order: next }));
+                setAppliedFilters(f => ({ ...f, sort_order: next }));
+              }}
+            >
+              {appliedFilters.sort_order === 'desc' ? '↓' : '↑'}
+            </button>
+          </div>
+        )}
 
         {showFilters && (
           <div className="filter-panel">

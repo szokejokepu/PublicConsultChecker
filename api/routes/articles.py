@@ -19,6 +19,8 @@ def list_articles(
     consultation: str = "any",
     min_score: float | None = None,
     starred: str = "any",
+    sort_by: str = "scraped_at",   # "scraped_at" | "date"
+    sort_order: str = "desc",      # "asc" | "desc"
 ):
     if search:
         articles = db.search_articles(search, limit=limit)
@@ -31,9 +33,11 @@ def list_articles(
             consultation=consultation,
             min_score=min_score,
             starred=starred,
+            sort_by=sort_by,
+            sort_order=sort_order,
         )
     else:
-        articles = db.list_articles(limit=limit, offset=offset)
+        articles = db.list_articles(limit=limit, offset=offset, sort_by=sort_by, sort_order=sort_order)
         total = db.get_stats()["total_articles"]
     return ArticleListOut(articles=[_to_out(a) for a in articles], total=total)
 

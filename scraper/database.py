@@ -177,10 +177,18 @@ class ArticleDB:
             ).fetchone()
         return _row_to_article(row) if row else None
 
-    def list_articles(self, limit: int = 50, offset: int = 0) -> list[Article]:
+    def list_articles(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        sort_by: str = "scraped_at",
+        sort_order: str = "desc",
+    ) -> list[Article]:
+        col = "date" if sort_by == "date" else "scraped_at"
+        direction = "ASC" if sort_order == "asc" else "DESC"
         with self._conn() as conn:
             rows = conn.execute(
-                "SELECT * FROM articles ORDER BY scraped_at DESC LIMIT ? OFFSET ?",
+                f"SELECT * FROM articles ORDER BY {col} {direction} NULLS LAST LIMIT ? OFFSET ?",
                 (limit, offset),
             ).fetchall()
         return [_row_to_article(r) for r in rows]
@@ -271,6 +279,8 @@ class ArticleDB:
         consultation: str = "any",    # "any" | "yes" | "no" | "unclassified"
         min_score: float | None = None,
         starred: str = "any",         # "any" | "yes" | "no"
+        sort_by: str = "scraped_at",
+        sort_order: str = "desc",
     ) -> tuple[list[Article], int]:
         """List articles with optional analysis filters, returns (articles, total)."""
         conditions: list[str] = []
@@ -300,6 +310,8 @@ class ArticleDB:
             conditions.append("articles.starred = 0")
 
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        col = "articles.date" if sort_by == "date" else "articles.scraped_at"
+        direction = "ASC" if sort_order == "asc" else "DESC"
 
         with self._conn() as conn:
             total = conn.execute(
@@ -307,7 +319,7 @@ class ArticleDB:
             ).fetchone()[0]
             rows = conn.execute(
                 f"SELECT articles.* FROM articles {join} {where} "
-                f"ORDER BY articles.scraped_at DESC LIMIT ? OFFSET ?",
+                f"ORDER BY {col} {direction} NULLS LAST LIMIT ? OFFSET ?",
                 params + [limit, offset],
             ).fetchall()
 
