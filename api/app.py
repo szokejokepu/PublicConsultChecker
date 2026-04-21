@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -11,8 +12,20 @@ from fastapi.staticfiles import StaticFiles
 from api.routes.articles import router as articles_router
 from api.routes.process import router as process_router
 from api.routes.scrape import router as scrape_router
+from api.scheduler import create_scheduler
 
-app = FastAPI(title="Article Scraper API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = create_scheduler()
+    if scheduler:
+        scheduler.start()
+    yield
+    if scheduler:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title="Article Scraper API", lifespan=lifespan)
 
 app.include_router(articles_router)
 app.include_router(scrape_router)
@@ -25,15 +38,12 @@ if FRONTEND_DIR.exists():
     def index():
         return FileResponse(FRONTEND_DIR / "index.html")
 
-
     @app.get("/favicon.svg", include_in_schema=False)
     def favicon():
         return FileResponse(FRONTEND_DIR / "favicon.svg")
 
-
     @app.get("/icons.svg", include_in_schema=False)
     def icons():
         return FileResponse(FRONTEND_DIR / "icons.svg")
-
 
     app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")

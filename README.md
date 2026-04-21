@@ -194,6 +194,24 @@ Query parameters for `GET /api/articles`: `limit`, `offset`, `search`, `processe
 
 ---
 
+### Background Scheduler
+
+When the API server runs, a background scheduler automatically: scrapes configured websites → classifies new articles → sends email notifications for newly detected public consultations.
+
+Controlled entirely via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SCHEDULER_ENABLED` | `true` | Set `false` to disable (e.g. local dev) |
+| `SCHEDULER_INTERVAL_MINUTES` | `60` | How often the full cycle runs |
+| `SCHEDULER_CONFIGS` | _(empty)_ | Comma-separated paths to scrape config JSON files |
+
+The first run happens after the first interval elapses. To test quickly, set `SCHEDULER_INTERVAL_MINUTES=1`.
+
+Notification failures do not mark articles as notified — they will be retried on the next cycle.
+
+---
+
 ### Email Notifier — `notifier/sender.py`
 
 Sends an HTML+text digest email listing newly detected public consultation articles.

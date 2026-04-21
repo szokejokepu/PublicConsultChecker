@@ -34,3 +34,16 @@ class JobOut(BaseModel):
     status: str
     summary: dict
     error: str | None
+
+
+class CrawlSessionOut(BaseModel):
+    id: int
+    triggered_at: str
+    trigger_source: str
+    config_url: str
+    status: str
+    finished_at: str | None
+    saved: int | None
+    skipped: int | None
+    failed: int | None
+    error: str | None

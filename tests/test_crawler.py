@@ -215,6 +215,8 @@ class TestCrawlPaginated:
         assert summary["saved"] == 2
         assert summary["failed"] == 0
         assert db.get_stats()["total_articles"] == 2
+        assert len(summary["article_ids"]) == 2
+        assert all(isinstance(i, int) for i in summary["article_ids"])
 
     def test_follows_multiple_pages(self, db):
         pages = {
@@ -281,6 +283,7 @@ class TestCrawlPaginated:
             summary = crawl_paginated(BASE_URL, db, verbose=False)
 
         assert summary["saved"] == 0
+        assert summary["article_ids"] == []
         assert db.get_stats()["total_articles"] == 0
 
     def test_failed_listing_fetch_stops_loop(self, db):
@@ -387,6 +390,7 @@ class TestCrawlPaginated:
         assert summary["saved"] == n
         assert summary["failed"] == 0
         assert db.get_stats()["total_articles"] == n
+        assert len(summary["article_ids"]) == n
 
     def test_path_style_pagination(self, db):
         """crawl_paginated with path-style URLs (base/2, base/3, …)."""

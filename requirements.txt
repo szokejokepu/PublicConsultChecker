@@ -16,3 +16,4 @@ datasets>=2.19.0
 scikit-learn>=1.4.0
 ollama
 python-dotenv>=1.0.0
+apscheduler>=3.10.0

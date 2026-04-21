@@ -103,7 +103,7 @@ def crawl_paginated(
     page_prefix: str = DEFAULT_PAGE_PREFIX,
     page_suffix: str = DEFAULT_PAGE_SUFFIX,
     verbose: bool = True,
-) -> dict[str, int]:
+) -> dict:
     """
     Crawl a paginated listing and save every article found.
 
@@ -114,9 +114,9 @@ def crawl_paginated(
     The URL for each page is built by :func:`page_url` using *page_separator*,
     *page_prefix*, and *page_suffix* (see that function for details).
 
-    Returns {"saved": N, "skipped": N, "failed": N}.
+    Returns {"saved": N, "skipped": N, "failed": N, "article_ids": [int, ...]}.
     """
-    summary = {"saved": 0, "skipped": 0, "failed": 0}
+    summary: dict = {"saved": 0, "skipped": 0, "failed": 0, "article_ids": []}
     visited_articles: set[str] = set()
     page = 1
 
@@ -171,6 +171,7 @@ def crawl_paginated(
                 row_id = db.save_article(**result)
                 if row_id is not None:
                     summary["saved"] += 1
+                    summary["article_ids"].append(row_id)
                     if verbose:
                         print(f"  [saved #{row_id}] {result['title'] or link}")
                 else:

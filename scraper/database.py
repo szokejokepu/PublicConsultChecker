@@ -58,6 +58,43 @@ CREATE TABLE IF NOT EXISTS article_analysis (
 
 MIGRATE_NOTIFIED_AT = "ALTER TABLE article_analysis ADD COLUMN notified_at TEXT"
 
+CREATE_CRAWL_SESSIONS = """
+CREATE TABLE IF NOT EXISTS crawl_sessions (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    triggered_at    TEXT NOT NULL,
+    trigger_source  TEXT NOT NULL,
+    config_url      TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'running',
+    finished_at     TEXT,
+    saved           INTEGER,
+    skipped         INTEGER,
+    failed          INTEGER,
+    error           TEXT
+)
+"""
+
+CREATE_CRAWL_SESSION_ARTICLES = """
+CREATE TABLE IF NOT EXISTS crawl_session_articles (
+    session_id  INTEGER NOT NULL REFERENCES crawl_sessions(id) ON DELETE CASCADE,
+    article_id  INTEGER NOT NULL REFERENCES articles(id) ON DELETE CASCADE,
+    PRIMARY KEY (session_id, article_id)
+)
+"""
+
+
+@dataclass
+class CrawlSession:
+    id: int
+    triggered_at: str
+    trigger_source: str
+    config_url: str
+    status: str
+    finished_at: str | None
+    saved: int | None
+    skipped: int | None
+    failed: int | None
+    error: str | None
+
 
 @dataclass
 class Article:
@@ -100,9 +137,12 @@ class ArticleDB:
 
     def _ensure_tables(self) -> None:
         with self._conn() as conn:
+            conn.execute("PRAGMA foreign_keys = ON")
             conn.execute(CREATE_TABLE)
             conn.execute(CREATE_FTS)
             conn.execute(CREATE_ANALYSIS_TABLE)
+            conn.execute(CREATE_CRAWL_SESSIONS)
+            conn.execute(CREATE_CRAWL_SESSION_ARTICLES)
             for migration in (MIGRATE_STARRED, MIGRATE_NOTIFIED_AT):
                 try:
                     conn.execute(migration)
@@ -325,6 +365,94 @@ class ArticleDB:
 
         return [_row_to_article(r) for r in rows], total
 
+    # ------------------------------------------------------------------
+    # Crawl sessions
+    # ------------------------------------------------------------------
+
+    def create_crawl_session(
+        self,
+        *,
+        triggered_at: str,
+        trigger_source: str,
+        config_url: str,
+    ) -> int:
+        """Insert a running session row and return its id."""
+        with self._conn() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO crawl_sessions (triggered_at, trigger_source, config_url, status)
+                VALUES (?, ?, ?, 'running')
+                """,
+                (triggered_at, trigger_source, config_url),
+            )
+            return cur.lastrowid
+
+    def finish_crawl_session(self, session_id: int, summary: dict) -> None:
+        """Mark session as done and record counts from crawl summary."""
+        with self._conn() as conn:
+            conn.execute(
+                """
+                UPDATE crawl_sessions
+                SET status = 'done', finished_at = ?, saved = ?, skipped = ?, failed = ?
+                WHERE id = ?
+                """,
+                (
+                    datetime.utcnow().isoformat(),
+                    summary.get("saved"),
+                    summary.get("skipped"),
+                    summary.get("failed"),
+                    session_id,
+                ),
+            )
+
+    def fail_crawl_session(self, session_id: int, error: str) -> None:
+        """Mark session as failed with an error message."""
+        with self._conn() as conn:
+            conn.execute(
+                """
+                UPDATE crawl_sessions
+                SET status = 'failed', finished_at = ?, error = ?
+                WHERE id = ?
+                """,
+                (datetime.utcnow().isoformat(), error, session_id),
+            )
+
+    def link_articles_to_session(self, session_id: int, article_ids: list[int]) -> None:
+        """Associate saved article IDs with a crawl session."""
+        if not article_ids:
+            return
+        with self._conn() as conn:
+            conn.executemany(
+                "INSERT OR IGNORE INTO crawl_session_articles (session_id, article_id) VALUES (?, ?)",
+                [(session_id, aid) for aid in article_ids],
+            )
+
+    def list_crawl_sessions(
+        self, limit: int = 50, offset: int = 0
+    ) -> list[CrawlSession]:
+        """Return crawl sessions ordered newest first."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                """
+                SELECT id, triggered_at, trigger_source, config_url,
+                       status, finished_at, saved, skipped, failed, error
+                FROM crawl_sessions
+                ORDER BY triggered_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                (limit, offset),
+            ).fetchall()
+        return [_row_to_crawl_session(r) for r in rows]
+
+    def get_crawl_session_article_ids(self, session_id: int) -> list[int]:
+        """Return article IDs linked to a crawl session."""
+        with self._conn() as conn:
+            rows = conn.execute(
+                "SELECT article_id FROM crawl_session_articles WHERE session_id = ?",
+                (session_id,),
+            ).fetchall()
+        return [r[0] for r in rows]
+
     def set_notified(self, article_id: int, notified_at: str) -> bool:
         """Stamp an analysis row as notified. Returns True if the row exists."""
         with self._conn() as conn:
@@ -377,6 +505,21 @@ def _row_to_article(row: sqlite3.Row) -> Article:
         source_url=row["source_url"],
         scraped_at=row["scraped_at"],
         starred=bool(row["starred"]),
+    )
+
+
+def _row_to_crawl_session(row: sqlite3.Row) -> CrawlSession:
+    return CrawlSession(
+        id=row["id"],
+        triggered_at=row["triggered_at"],
+        trigger_source=row["trigger_source"],
+        config_url=row["config_url"],
+        status=row["status"],
+        finished_at=row["finished_at"],
+        saved=row["saved"],
+        skipped=row["skipped"],
+        failed=row["failed"],
+        error=row["error"],
     )
 
 
