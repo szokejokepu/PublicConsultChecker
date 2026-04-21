@@ -1,4 +1,7 @@
-# RAG — Public Consultation Monitor
+# Public Consultation Monitor
+
+This project is a proof-of-concept for a public consultation monitoring system. It crawls a given Romanian municipal website
+and detects public consultation announcements using natural language processing.
 
 A pipeline that scrapes Romanian municipal websites, detects public consultation announcements using NLP, and sends email digest notifications.
 
