@@ -14,18 +14,26 @@ from api.routes.scrape import router as scrape_router
 
 app = FastAPI(title="Article Scraper API")
 
-FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
-# FRONTEND_DIR = Path(__file__).parent.parent / "rag-front" / "dist"
-
-
-@app.get("/", include_in_schema=False)
-def index():
-    return FileResponse(FRONTEND_DIR / "index.html")
-
-
-# app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
-
 app.include_router(articles_router)
 app.include_router(scrape_router)
 app.include_router(process_router)
+
+FRONTEND_DIR = Path(__file__).parent.parent / "rag-front" / "dist"
+
+if FRONTEND_DIR.exists():
+    @app.get("/", include_in_schema=False)
+    def index():
+        return FileResponse(FRONTEND_DIR / "index.html")
+
+
+    @app.get("/favicon.svg", include_in_schema=False)
+    def favicon():
+        return FileResponse(FRONTEND_DIR / "favicon.svg")
+
+
+    @app.get("/icons.svg", include_in_schema=False)
+    def icons():
+        return FileResponse(FRONTEND_DIR / "icons.svg")
+
+
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIR / "assets"), name="assets")

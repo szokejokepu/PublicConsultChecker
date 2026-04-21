@@ -39,6 +39,50 @@ Gmail users: generate an **App Password** at [myaccount.google.com/apppasswords]
 
 ---
 
+## Docker
+
+Run the full stack (API + React frontend) with a single command.
+
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) 24+ with Compose v2 (bundled with Docker Desktop)
+
+### Setup
+
+```bash
+cp .env.example .env   # fill in SMTP credentials, or leave values blank if not using the notifier
+docker compose up --build
+```
+
+Open **http://localhost:8000**.
+
+First build takes 5–10 minutes (downloads Node + Python deps, compiles the frontend).
+The first time the NLP pipeline runs (`POST /api/process`), the container downloads two HuggingFace BERT models (~900 MB total) into the data volume. This happens once; subsequent runs use the cache.
+
+### Commands
+
+```bash
+docker compose down          # stop; data volume is preserved
+docker compose up            # restart without rebuilding
+docker compose up --build    # rebuild after code changes
+docker compose down -v       # WARNING: deletes the database and model cache
+```
+
+### Data persistence
+
+The SQLite database and HuggingFace model weights are stored in the `rag_data` named volume at `/data` inside the container.
+
+| Variable | Default in container | Purpose |
+|----------|----------------------|---------|
+| `DB_PATH` | `/data/articles.db` | SQLite database location |
+| `HF_HOME` | `/data/hf_cache` | HuggingFace model cache |
+
+### Image size
+
+CPU-only PyTorch is used (~300 MB vs ~2.5 GB for the CUDA build). Total image size: ~800 MB.
+
+---
+
 ## Scripts
 
 ### Scraper CLI — `main.py`

@@ -1,0 +1,17 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_PATH: /app/articles.db
+      HF_HOME: /data/hf_cache
+    volumes:
+      - ./articles.db:/app/articles.db   # bind-mount local DB file
+      - hf_cache:/data/hf_cache          # named volume for model cache
+    restart: unless-stopped
+
+volumes:
+  hf_cache:
