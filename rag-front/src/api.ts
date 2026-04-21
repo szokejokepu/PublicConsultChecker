@@ -73,3 +73,24 @@ export interface JobOut {
   summary: any;
   error: string | null;
 }
+
+export interface CrawlSessionOut {
+  id: number;
+  triggered_at: string;
+  trigger_source: string;
+  config_url: string;
+  status: 'running' | 'done' | 'failed';
+  finished_at: string | null;
+  saved: number | null;
+  skipped: number | null;
+  failed: number | null;
+  error: string | null;
+}
+
+export interface SessionArticle {
+  id: number;
+  url: string;
+  title: string | null;
+  scraped_at: string;
+  date: string | null;
+}

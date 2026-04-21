@@ -62,6 +62,23 @@ def list_crawl_sessions(limit: int = 50, offset: int = 0):
     return [_session_to_out(s) for s in sessions]
 
 
+@router.get("/crawl-sessions/{session_id}/articles")
+def get_session_articles(session_id: int):
+    article_ids = db.get_crawl_session_article_ids(session_id)
+    articles = []
+    for aid in article_ids:
+        a = db.get_article(aid)
+        if a:
+            articles.append({
+                "id": a.id,
+                "url": a.url,
+                "title": a.title,
+                "scraped_at": a.scraped_at,
+                "date": a.date,
+            })
+    return articles
+
+
 def _job_to_out(job) -> JobOut:
     return JobOut(
         job_id=job.id,

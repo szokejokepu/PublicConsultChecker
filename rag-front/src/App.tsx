@@ -6,10 +6,11 @@ import type { StatsOut } from './api';
 import Sidebar from './components/Sidebar';
 import ArticleDetail from './components/ArticleDetail';
 import ScrapePanel from './components/ScrapePanel';
+import CrawlHistory from './components/CrawlHistory';
 
 export default function App() {
   const [stats, setStats] = useState<StatsOut | null>(null);
-  const [activeTab, setActiveTab] = useState<'detail' | 'scrape'>('detail');
+  const [activeTab, setActiveTab] = useState<'detail' | 'scrape' | 'crawls'>('detail');
   const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -31,6 +32,11 @@ export default function App() {
   };
 
   const handleSelectArticle = (id: number) => {
+    setSelectedArticleId(id);
+    setActiveTab('detail');
+  };
+
+  const handleSelectArticleFromHistory = (id: number) => {
     setSelectedArticleId(id);
     setActiveTab('detail');
   };
@@ -71,11 +77,17 @@ export default function App() {
             >
               Article Reading
             </div>
-            <div 
+            <div
               className={`nav-item ${activeTab === 'scrape' ? 'active' : ''}`}
               onClick={() => setActiveTab('scrape')}
             >
               Scraping Tasks
+            </div>
+            <div
+              className={`nav-item ${activeTab === 'crawls' ? 'active' : ''}`}
+              onClick={() => setActiveTab('crawls')}
+            >
+              Crawl History
             </div>
           </nav>
 
@@ -101,6 +113,11 @@ export default function App() {
             {activeTab === 'scrape' && (
               <div className="scrollable-content">
                 <ScrapePanel onJobDone={triggerRefresh} />
+              </div>
+            )}
+            {activeTab === 'crawls' && (
+              <div className="scrollable-content">
+                <CrawlHistory onSelectArticle={handleSelectArticleFromHistory} />
               </div>
             )}
           </div>

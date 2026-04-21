@@ -1,0 +1,242 @@
+.crawl-history {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.crawl-history-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: var(--text-primary);
+}
+
+.crawl-history-loading,
+.crawl-history-empty,
+.crawl-history-error {
+  color: var(--text-muted);
+  padding: 32px 0;
+  text-align: center;
+}
+
+.crawl-history-error { color: #dc2626; }
+
+/* Table */
+.crawl-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.crawl-table th {
+  text-align: left;
+  padding: 10px 12px;
+  color: var(--text-muted);
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.crawl-row {
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.crawl-row:hover {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.crawl-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.crawl-date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-secondary);
+}
+
+.crawl-url {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.crawl-count {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Badges */
+.crawl-source-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.crawl-source-badge.scheduler {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.crawl-source-badge.manual {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.crawl-status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.crawl-status-badge.done {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.crawl-status-badge.running {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.crawl-status-badge.failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+/* Modal */
+.crawl-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.crawl-modal {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  padding: 28px 32px;
+  width: 640px;
+  max-width: 95vw;
+  max-height: 80vh;
+  overflow-y: auto;
+  position: relative;
+}
+
+.crawl-modal-close {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.crawl-modal-close:hover { color: var(--text-primary); }
+
+.crawl-modal-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-primary);
+}
+
+.crawl-modal-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+  margin-bottom: 20px;
+}
+
+.meta-label {
+  color: var(--text-secondary);
+  margin-right: 6px;
+}
+
+.crawl-modal-counts {
+  display: flex;
+  gap: 20px;
+  margin-top: 4px;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.crawl-modal-error {
+  color: #dc2626;
+}
+
+.crawl-modal-articles-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 10px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+}
+
+.crawl-modal-loading,
+.crawl-modal-empty {
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.crawl-modal-articles {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.crawl-modal-article {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 0.875rem;
+  color: var(--text-primary);
+}
+
+.crawl-modal-article:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.crawl-modal-article-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 12px;
+}
+
+.crawl-modal-article-date {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
