@@ -1,24 +1,42 @@
 .sched-panel {
   display: flex;
   flex-direction: column;
-  gap: 2rem;
-  max-width: 600px;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 2rem;
+  width: 100%;
+  box-sizing: border-box;
   animation: fadeIn 0.3s ease;
+}
+
+/* Two-column grid that collapses to single centered column */
+.sched-cards-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 1060px;
 }
 
 .sched-card {
   background: white;
   border-radius: var(--radius-lg, 12px);
-  padding: 2rem;
+  padding: 1.75rem 2rem;
   box-shadow: var(--shadow-sm, 0 1px 4px rgba(0,0,0,0.06));
   border: 1px solid var(--border-color);
+  flex: 1 1 360px;
+  min-width: 0;
+  max-width: 500px;
+  box-sizing: border-box;
 }
 
-.sched-header {
+/* Card header */
+.sched-card-header {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  margin-bottom: 1.75rem;
+  margin-bottom: 1.5rem;
 }
 
 .sched-header-icon {
@@ -28,39 +46,39 @@
 }
 
 .sched-title {
-  font-size: 1.15rem;
+  font-size: 1.05rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.25rem;
 }
 
 .sched-desc {
-  font-size: 0.875rem;
+  font-size: 0.85rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.45;
 }
 
 /* Sections */
 .sched-section {
-  margin-bottom: 1.5rem;
+  margin-bottom: 1.25rem;
 }
 
 .sched-section-title {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--text-muted);
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
 }
 
 .sched-divider {
   border: none;
   border-top: 1px solid var(--border-color);
-  margin: 1.5rem 0;
+  margin: 1.25rem 0;
 }
 
 /* Field label */
@@ -188,15 +206,16 @@
   box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
 }
 
-/* Actions */
+/* Save row (below the grid) */
 .sched-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 0.5rem;
+  justify-content: center;
+  width: 100%;
+  max-width: 1060px;
 }
 
 .sched-save-btn {
-  padding: 9px 22px;
+  padding: 9px 28px;
   border-radius: var(--radius-sm, 6px);
   border: none;
   background: var(--accent-primary, #4f46e5);
@@ -236,5 +255,8 @@
 .sched-error-msg {
   color: #dc2626;
   font-size: 0.875rem;
-  margin-bottom: 0.75rem;
+}
+
+.sched-error-centered {
+  text-align: center;
 }

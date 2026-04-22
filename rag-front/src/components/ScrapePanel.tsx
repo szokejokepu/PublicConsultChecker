@@ -125,7 +125,7 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
 
   return (
     <div className="scrape-panel">
-      
+      <div className="scrape-cards-grid">
       <div className="scrape-form-card">
         <div className="scrape-header">
           <h2 className="scrape-title"><Network size={20} className="app-brand-icon" /> Start a New Scrape</h2>
@@ -222,7 +222,9 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
           </button>
         </div>
       </div>
+      </div>{/* end scrape-cards-grid */}
 
+      <div className="scrape-status-row">
       {processJobStatus && (
         <div className={`job-status-card animate-fade-in ${processJobStatus.status}`}>
           <div className="job-header">
@@ -278,15 +280,15 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
             </div>
             <span className="job-id">job_{jobStatus.job_id.slice(0, 8)}...</span>
           </div>
-          
+
           {jobStatus.summary && Object.keys(jobStatus.summary).length > 0 && (
             <div className="job-summary">
-              <strong>Saved:</strong> {jobStatus.summary.saved} &bull; 
-              <strong> Skipped:</strong> {jobStatus.summary.skipped} &bull; 
+              <strong>Saved:</strong> {jobStatus.summary.saved} &bull;
+              <strong> Skipped:</strong> {jobStatus.summary.skipped} &bull;
               <strong> Failed:</strong> {jobStatus.summary.failed}
             </div>
           )}
-          
+
           {jobStatus.error && (
             <div style={{ color: 'var(--danger)', fontSize: '0.9rem', marginTop: '0.5rem' }}>
               <strong>Error:</strong> {jobStatus.error}
@@ -294,7 +296,8 @@ export default function ScrapePanel({ onJobDone }: { onJobDone: () => void }) {
           )}
         </div>
       )}
-      
+      </div>{/* end scrape-status-row */}
+
     </div>
   );
 }
