@@ -35,8 +35,11 @@ def _load_configs() -> list[ScrapeConfig]:
 def run_monitor_cycle() -> None:
     """One full scrape → classify → notify cycle."""
     settings = db.get_scheduler_settings()
+    configs = _load_configs()
+    # Use classifier settings from the first config that defines them; fall back to defaults.
+    pipeline_cfg = configs[0] if configs else None
 
-    for cfg in _load_configs():
+    for cfg in configs:
         session_id = db.create_crawl_session(
             triggered_at=datetime.now(timezone.utc).isoformat(),
             trigger_source="scheduler",
@@ -67,6 +70,8 @@ def run_monitor_cycle() -> None:
             use_keyword_filter=settings.use_keyword_filter,
             batch_size=settings.batch_size,
             reprocess_all=settings.reprocess_all,
+            **({"model_name": pipeline_cfg.model_name,
+                "positive_refs": pipeline_cfg.positive_refs} if pipeline_cfg else {}),
         )
         logger.info("Pipeline: %s", pipeline_summary)
     except Exception:

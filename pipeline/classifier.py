@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-MODEL_NAME = "dumitrescustefan/bert-base-romanian-cased-v1"
+DEFAULT_MODEL_NAME = "dumitrescustefan/bert-base-romanian-cased-v1"
 
-POSITIVE_REFS: list[str] = [
+DEFAULT_POSITIVE_REFS: list[str] = [
     "Anunțăm organizarea unei dezbateri publice privind proiectul de hotărâre",
     "Se convoacă audierea publică a cetățenilor referitoare la",
     "Consultare publică privind proiectul de buget al municipiului",
@@ -12,18 +12,16 @@ POSITIVE_REFS: list[str] = [
     "Anunț public: supunem dezbaterii publice următorul proiect",
 ]
 
-# Module-level lazy singletons (populated on first call)
-_tokenizer = None
-_model = None
-_ref_embeddings = None  # torch.Tensor once loaded
+# Cache keyed by (model_name, tuple(positive_refs))
+_cache: dict = {}
 
 
-def _embed(texts: list[str]):
+def _embed(tokenizer, model, texts: list[str]):
     """Return mean-pooled, L2-normalised embeddings, shape (N, hidden)."""
     import torch
     import torch.nn.functional as F
 
-    enc = _tokenizer(
+    enc = tokenizer(
         texts,
         padding=True,
         truncation=True,
@@ -31,30 +29,34 @@ def _embed(texts: list[str]):
         return_tensors="pt",
     )
     with torch.no_grad():
-        out = _model(**enc)
+        out = model(**enc)
     mask = enc["attention_mask"].unsqueeze(-1).float()
     embeddings = (out.last_hidden_state * mask).sum(1) / mask.sum(1)
     return F.normalize(embeddings, dim=-1)
 
 
-def _load():
-    global _tokenizer, _model, _ref_embeddings
-    if _tokenizer is None:
+def _load(model_name: str, positive_refs: list[str]):
+    key = (model_name, tuple(positive_refs))
+    if key not in _cache:
         from transformers import AutoModel, AutoTokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name)
+        model.eval()
+        ref_embeddings = _embed(tokenizer, model, positive_refs)
+        _cache[key] = (tokenizer, model, ref_embeddings)
+    return _cache[key]
 
-        _tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-        _model = AutoModel.from_pretrained(MODEL_NAME)
-        _model.eval()
-        _ref_embeddings = _embed(POSITIVE_REFS)
-    return _tokenizer, _model, _ref_embeddings
 
-
-def classify(text: str, threshold: float = 0.65) -> tuple[bool, float]:
+def classify(
+    text: str,
+    threshold: float = 0.65,
+    model_name: str = DEFAULT_MODEL_NAME,
+    positive_refs: list[str] | None = None,
+) -> tuple[bool, float]:
     """Return ``(is_positive, mean_cosine_score)`` for *text*."""
-    import torch
-
-    _load()
-    text_emb = _embed([text])                        # shape (1, hidden)
-    scores = (text_emb @ _ref_embeddings.T).squeeze(0)  # shape (N,)
+    refs = positive_refs if positive_refs is not None else DEFAULT_POSITIVE_REFS
+    tokenizer, model, ref_embeddings = _load(model_name, refs)
+    text_emb = _embed(tokenizer, model, [text])           # shape (1, hidden)
+    scores = (text_emb @ ref_embeddings.T).squeeze(0)     # shape (N,)
     mean_score = scores.mean().item()
     return mean_score >= threshold, mean_score

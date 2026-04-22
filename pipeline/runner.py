@@ -6,14 +6,20 @@ from datetime import datetime
 
 from scraper.database import ArticleDB
 
-from .classifier import classify
+from .classifier import classify, DEFAULT_MODEL_NAME, DEFAULT_POSITIVE_REFS
 from .keyword_filter import keyword_filter
 from .models import AnalysisResult
 from .ner import extract_entities
 from .normalizer import normalize
 
 
-def process_single(article, db: ArticleDB, use_keyword_filter: bool = True) -> AnalysisResult:
+def process_single(
+    article,
+    db: ArticleDB,
+    use_keyword_filter: bool = True,
+    model_name: str = DEFAULT_MODEL_NAME,
+    positive_refs: list[str] | None = None,
+) -> AnalysisResult:
     """Process or reprocess a single article, overwriting any existing analysis."""
     processed_at = datetime.utcnow().isoformat()
     text = article.content or ""
@@ -34,7 +40,7 @@ def process_single(article, db: ArticleDB, use_keyword_filter: bool = True) -> A
             processed_at=processed_at,
         )
     else:
-        is_positive, score = classify(normalized)
+        is_positive, score = classify(normalized, model_name=model_name, positive_refs=positive_refs)
         entities = extract_entities(text)
         result = AnalysisResult(
             article_id=article.id,
@@ -60,6 +66,8 @@ def run_pipeline(
     use_keyword_filter: bool = True,
     reprocess_all: bool = False,
     _offset: int = 0,
+    model_name: str = DEFAULT_MODEL_NAME,
+    positive_refs: list[str] | None = None,
 ) -> dict:
     """Process articles and return a summary dict with keys ``processed``,
     ``matched``, ``classified_positive``.
@@ -105,7 +113,7 @@ def run_pipeline(
 
         if kw_matched:
             matched += 1
-        is_positive, score = classify(normalized)
+        is_positive, score = classify(normalized, model_name=model_name, positive_refs=positive_refs)
         entities = extract_entities(text)
 
         if is_positive:

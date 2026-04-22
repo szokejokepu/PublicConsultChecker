@@ -5,5 +5,13 @@
   "workers": 8,
   "page_separator": "-",
   "page_prefix": "page",
-  "page_suffix": "/"
+  "page_suffix": "/",
+  "model_name": "dumitrescustefan/bert-base-romanian-cased-v1",
+  "positive_refs": [
+    "Anunțăm organizarea unei dezbateri publice privind proiectul de hotărâre",
+    "Se convoacă audierea publică a cetățenilor referitoare la",
+    "Consultare publică privind proiectul de buget al municipiului",
+    "Invitație la ședința publică de dezbatere a planului urbanistic",
+    "Anunț public: supunem dezbaterii publice următorul proiect"
+  ]
 }

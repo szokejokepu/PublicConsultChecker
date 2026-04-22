@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from pipeline.classifier import DEFAULT_MODEL_NAME, DEFAULT_POSITIVE_REFS
 
 
 DEFAULT_ARTICLE_LINK_SELECTOR = ".comunicate_presa_right h2 a"
@@ -25,6 +27,8 @@ class ScrapeConfig:
     page_separator: str = DEFAULT_PAGE_SEPARATOR
     page_prefix: str = DEFAULT_PAGE_PREFIX
     page_suffix: str = DEFAULT_PAGE_SUFFIX
+    model_name: str = DEFAULT_MODEL_NAME
+    positive_refs: list[str] = field(default_factory=lambda: list(DEFAULT_POSITIVE_REFS))
 
     @classmethod
     def from_dict(cls, data: dict) -> ScrapeConfig:
@@ -40,4 +44,6 @@ class ScrapeConfig:
             page_separator=data.get("page_separator", DEFAULT_PAGE_SEPARATOR),
             page_prefix=data.get("page_prefix", DEFAULT_PAGE_PREFIX),
             page_suffix=data.get("page_suffix", DEFAULT_PAGE_SUFFIX),
+            model_name=data.get("model_name", DEFAULT_MODEL_NAME),
+            positive_refs=data.get("positive_refs", list(DEFAULT_POSITIVE_REFS)),
         )
