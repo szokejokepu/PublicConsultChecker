@@ -94,3 +94,11 @@ export interface SessionArticle {
   scraped_at: string;
   date: string | null;
 }
+
+export interface SchedulerSettings {
+  enabled: boolean;
+  interval_minutes: number;
+  use_keyword_filter: boolean;
+  batch_size: number;
+  reprocess_all: boolean;
+}

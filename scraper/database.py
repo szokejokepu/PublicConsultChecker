@@ -81,6 +81,26 @@ CREATE TABLE IF NOT EXISTS crawl_session_articles (
 )
 """
 
+CREATE_SCHEDULER_SETTINGS = """
+CREATE TABLE IF NOT EXISTS scheduler_settings (
+    id                  INTEGER PRIMARY KEY CHECK (id = 1),
+    enabled             INTEGER NOT NULL DEFAULT 1,
+    interval_minutes    INTEGER NOT NULL DEFAULT 60,
+    use_keyword_filter  INTEGER NOT NULL DEFAULT 1,
+    batch_size          INTEGER NOT NULL DEFAULT 32,
+    reprocess_all       INTEGER NOT NULL DEFAULT 0
+)
+"""
+
+
+@dataclass
+class SchedulerSettings:
+    enabled: bool
+    interval_minutes: int
+    use_keyword_filter: bool
+    batch_size: int
+    reprocess_all: bool
+
 
 @dataclass
 class CrawlSession:
@@ -143,6 +163,7 @@ class ArticleDB:
             conn.execute(CREATE_ANALYSIS_TABLE)
             conn.execute(CREATE_CRAWL_SESSIONS)
             conn.execute(CREATE_CRAWL_SESSION_ARTICLES)
+            conn.execute(CREATE_SCHEDULER_SETTINGS)
             for migration in (MIGRATE_STARRED, MIGRATE_NOTIFIED_AT):
                 try:
                     conn.execute(migration)
@@ -452,6 +473,45 @@ class ArticleDB:
                 (session_id,),
             ).fetchall()
         return [r[0] for r in rows]
+
+    # ------------------------------------------------------------------
+    # Scheduler settings
+    # ------------------------------------------------------------------
+
+    def get_scheduler_settings(self) -> SchedulerSettings:
+        """Return current scheduler settings, inserting defaults on first call."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT * FROM scheduler_settings WHERE id = 1").fetchone()
+            if row is None:
+                conn.execute(
+                    "INSERT INTO scheduler_settings (id) VALUES (1)"
+                )
+                row = conn.execute("SELECT * FROM scheduler_settings WHERE id = 1").fetchone()
+        return SchedulerSettings(
+            enabled=bool(row["enabled"]),
+            interval_minutes=row["interval_minutes"],
+            use_keyword_filter=bool(row["use_keyword_filter"]),
+            batch_size=row["batch_size"],
+            reprocess_all=bool(row["reprocess_all"]),
+        )
+
+    def save_scheduler_settings(self, s: SchedulerSettings) -> None:
+        with self._conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO scheduler_settings
+                    (id, enabled, interval_minutes, use_keyword_filter, batch_size, reprocess_all)
+                VALUES (1, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    enabled            = excluded.enabled,
+                    interval_minutes   = excluded.interval_minutes,
+                    use_keyword_filter = excluded.use_keyword_filter,
+                    batch_size         = excluded.batch_size,
+                    reprocess_all      = excluded.reprocess_all
+                """,
+                (int(s.enabled), s.interval_minutes, int(s.use_keyword_filter),
+                 s.batch_size, int(s.reprocess_all)),
+            )
 
     def set_notified(self, article_id: int, notified_at: str) -> bool:
         """Stamp an analysis row as notified. Returns True if the row exists."""

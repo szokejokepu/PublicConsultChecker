@@ -16,6 +16,8 @@ from scraper.crawler import crawl_paginated
 
 logger = logging.getLogger(__name__)
 
+_scheduler: BackgroundScheduler | None = None
+
 
 def _load_configs() -> list[ScrapeConfig]:
     raw = os.environ.get("SCHEDULER_CONFIGS", "")
@@ -32,6 +34,8 @@ def _load_configs() -> list[ScrapeConfig]:
 
 def run_monitor_cycle() -> None:
     """One full scrape → classify → notify cycle."""
+    settings = db.get_scheduler_settings()
+
     for cfg in _load_configs():
         session_id = db.create_crawl_session(
             triggered_at=datetime.now(timezone.utc).isoformat(),
@@ -57,7 +61,13 @@ def run_monitor_cycle() -> None:
             logger.exception("Scrape failed for %s", cfg.url)
 
     try:
-        pipeline_summary = run_pipeline(db, verbose=False)
+        pipeline_summary = run_pipeline(
+            db,
+            verbose=False,
+            use_keyword_filter=settings.use_keyword_filter,
+            batch_size=settings.batch_size,
+            reprocess_all=settings.reprocess_all,
+        )
         logger.info("Pipeline: %s", pipeline_summary)
     except Exception:
         logger.exception("Pipeline failed")
@@ -98,20 +108,58 @@ def run_monitor_cycle() -> None:
         logger.exception("Notification failed — articles NOT marked notified, will retry next cycle")
 
 
+def apply_settings() -> None:
+    """Re-read settings from DB and reschedule / pause / resume the job."""
+    global _scheduler
+    if _scheduler is None:
+        return
+    settings = db.get_scheduler_settings()
+    job = _scheduler.get_job("monitor_cycle")
+    if settings.enabled:
+        if job is None:
+            _scheduler.add_job(
+                run_monitor_cycle,
+                trigger="interval",
+                minutes=settings.interval_minutes,
+                id="monitor_cycle",
+                max_instances=1,
+                coalesce=True,
+            )
+        else:
+            _scheduler.reschedule_job(
+                "monitor_cycle",
+                trigger="interval",
+                minutes=settings.interval_minutes,
+            )
+            job.resume()
+        logger.info("Scheduler applied: enabled, interval=%d min", settings.interval_minutes)
+    else:
+        if job is not None:
+            job.pause()
+        logger.info("Scheduler applied: disabled")
+
+
 def create_scheduler() -> BackgroundScheduler | None:
     """Create the APScheduler instance, or None if SCHEDULER_ENABLED=false."""
+    global _scheduler
+    # Env-var gate: hard-disable (useful in tests / dev without touching DB)
     if os.environ.get("SCHEDULER_ENABLED", "true").lower() not in ("1", "true", "yes"):
         logger.info("Scheduler disabled via SCHEDULER_ENABLED")
         return None
-    interval = int(os.environ.get("SCHEDULER_INTERVAL_MINUTES", "60"))
+
+    settings = db.get_scheduler_settings()
+
     scheduler = BackgroundScheduler()
-    scheduler.add_job(
-        run_monitor_cycle,
-        trigger="interval",
-        minutes=interval,
-        id="monitor_cycle",
-        max_instances=1,  # prevent overlap if one cycle exceeds the interval
-        coalesce=True,
-    )
-    logger.info("Scheduler configured: interval=%d min", interval)
+    if settings.enabled:
+        scheduler.add_job(
+            run_monitor_cycle,
+            trigger="interval",
+            minutes=settings.interval_minutes,
+            id="monitor_cycle",
+            max_instances=1,
+            coalesce=True,
+        )
+    _scheduler = scheduler
+    logger.info("Scheduler configured: enabled=%s interval=%d min",
+                settings.enabled, settings.interval_minutes)
     return scheduler

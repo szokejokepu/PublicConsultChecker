@@ -7,10 +7,11 @@ import Sidebar from './components/Sidebar';
 import ArticleDetail from './components/ArticleDetail';
 import ScrapePanel from './components/ScrapePanel';
 import CrawlHistory from './components/CrawlHistory';
+import SchedulerSettings from './components/SchedulerSettings';
 
 export default function App() {
   const [stats, setStats] = useState<StatsOut | null>(null);
-  const [activeTab, setActiveTab] = useState<'detail' | 'scrape' | 'crawls'>('detail');
+  const [activeTab, setActiveTab] = useState<'detail' | 'scrape' | 'crawls' | 'settings'>('detail');
   const [selectedArticleId, setSelectedArticleId] = useState<number | null>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -89,6 +90,12 @@ export default function App() {
             >
               Crawl History
             </div>
+            <div
+              className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+              onClick={() => setActiveTab('settings')}
+            >
+              Scheduler Settings
+            </div>
           </nav>
 
           <div className="content-panel">
@@ -118,6 +125,11 @@ export default function App() {
             {activeTab === 'crawls' && (
               <div className="scrollable-content">
                 <CrawlHistory onSelectArticle={handleSelectArticleFromHistory} />
+              </div>
+            )}
+            {activeTab === 'settings' && (
+              <div className="scrollable-content">
+                <SchedulerSettings />
               </div>
             )}
           </div>

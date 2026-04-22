@@ -266,25 +266,32 @@ class TestCreateScheduler:
 
     def test_returns_scheduler_when_enabled(self, monkeypatch):
         monkeypatch.setenv("SCHEDULER_ENABLED", "true")
-        assert create_scheduler() is not None
+        with patch("api.scheduler.db", _make_db()):
+            assert create_scheduler() is not None
 
     def test_interval_configured_correctly(self, monkeypatch):
         monkeypatch.setenv("SCHEDULER_ENABLED", "true")
-        monkeypatch.setenv("SCHEDULER_INTERVAL_MINUTES", "30")
-        scheduler = create_scheduler()
+        mock_db = _make_db()
+        from scraper.database import SchedulerSettings as SS
+        mock_db.save_scheduler_settings(SS(enabled=True, interval_minutes=30,
+                                           use_keyword_filter=True, batch_size=32, reprocess_all=False))
+        with patch("api.scheduler.db", mock_db):
+            scheduler = create_scheduler()
         job = scheduler.get_job("monitor_cycle")
         assert job is not None
         assert job.trigger.interval.total_seconds() == 30 * 60
 
     def test_default_interval_is_60_minutes(self, monkeypatch):
         monkeypatch.setenv("SCHEDULER_ENABLED", "true")
-        monkeypatch.delenv("SCHEDULER_INTERVAL_MINUTES", raising=False)
-        scheduler = create_scheduler()
+        mock_db = _make_db()
+        with patch("api.scheduler.db", mock_db):
+            scheduler = create_scheduler()
         job = scheduler.get_job("monitor_cycle")
         assert job.trigger.interval.total_seconds() == 60 * 60
 
     def test_max_instances_is_one(self, monkeypatch):
         monkeypatch.setenv("SCHEDULER_ENABLED", "true")
-        scheduler = create_scheduler()
+        with patch("api.scheduler.db", _make_db()):
+            scheduler = create_scheduler()
         job = scheduler.get_job("monitor_cycle")
         assert job.max_instances == 1

@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from api.routes.articles import router as articles_router
 from api.routes.process import router as process_router
 from api.routes.scrape import router as scrape_router
+from api.routes.scheduler import router as scheduler_router
 from api.scheduler import create_scheduler
 
 
@@ -30,6 +31,7 @@ app = FastAPI(title="Article Scraper API", lifespan=lifespan)
 app.include_router(articles_router)
 app.include_router(scrape_router)
 app.include_router(process_router)
+app.include_router(scheduler_router)
 
 FRONTEND_DIR = Path(__file__).parent.parent / "rag-front" / "dist"
 
