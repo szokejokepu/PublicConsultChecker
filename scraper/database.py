@@ -88,9 +88,14 @@ CREATE TABLE IF NOT EXISTS scheduler_settings (
     interval_minutes    INTEGER NOT NULL DEFAULT 60,
     use_keyword_filter  INTEGER NOT NULL DEFAULT 1,
     batch_size          INTEGER NOT NULL DEFAULT 32,
-    reprocess_all       INTEGER NOT NULL DEFAULT 0
+    reprocess_all       INTEGER NOT NULL DEFAULT 0,
+    notify_always       INTEGER NOT NULL DEFAULT 0
 )
 """
+
+MIGRATE_SCHEDULER_NOTIFY_ALWAYS = (
+    "ALTER TABLE scheduler_settings ADD COLUMN notify_always INTEGER NOT NULL DEFAULT 0"
+)
 
 
 @dataclass
@@ -100,6 +105,7 @@ class SchedulerSettings:
     use_keyword_filter: bool
     batch_size: int
     reprocess_all: bool
+    notify_always: bool = False
 
 
 @dataclass
@@ -164,7 +170,7 @@ class ArticleDB:
             conn.execute(CREATE_CRAWL_SESSIONS)
             conn.execute(CREATE_CRAWL_SESSION_ARTICLES)
             conn.execute(CREATE_SCHEDULER_SETTINGS)
-            for migration in (MIGRATE_STARRED, MIGRATE_NOTIFIED_AT):
+            for migration in (MIGRATE_STARRED, MIGRATE_NOTIFIED_AT, MIGRATE_SCHEDULER_NOTIFY_ALWAYS):
                 try:
                     conn.execute(migration)
                 except sqlite3.OperationalError:
@@ -493,6 +499,7 @@ class ArticleDB:
             use_keyword_filter=bool(row["use_keyword_filter"]),
             batch_size=row["batch_size"],
             reprocess_all=bool(row["reprocess_all"]),
+            notify_always=bool(row["notify_always"]),
         )
 
     def save_scheduler_settings(self, s: SchedulerSettings) -> None:
@@ -500,17 +507,18 @@ class ArticleDB:
             conn.execute(
                 """
                 INSERT INTO scheduler_settings
-                    (id, enabled, interval_minutes, use_keyword_filter, batch_size, reprocess_all)
-                VALUES (1, ?, ?, ?, ?, ?)
+                    (id, enabled, interval_minutes, use_keyword_filter, batch_size, reprocess_all, notify_always)
+                VALUES (1, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     enabled            = excluded.enabled,
                     interval_minutes   = excluded.interval_minutes,
                     use_keyword_filter = excluded.use_keyword_filter,
                     batch_size         = excluded.batch_size,
-                    reprocess_all      = excluded.reprocess_all
+                    reprocess_all      = excluded.reprocess_all,
+                    notify_always      = excluded.notify_always
                 """,
                 (int(s.enabled), s.interval_minutes, int(s.use_keyword_filter),
-                 s.batch_size, int(s.reprocess_all)),
+                 s.batch_size, int(s.reprocess_all), int(s.notify_always)),
             )
 
     def set_notified(self, article_id: int, notified_at: str) -> bool:

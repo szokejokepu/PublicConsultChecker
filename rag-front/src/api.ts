@@ -101,4 +101,5 @@ export interface SchedulerSettings {
   use_keyword_filter: boolean;
   batch_size: number;
   reprocess_all: boolean;
+  notify_always: boolean;
 }

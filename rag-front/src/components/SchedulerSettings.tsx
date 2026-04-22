@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock, RefreshCw, Filter, Layers, RotateCcw } from 'lucide-react';
+import { Clock, RefreshCw, Filter, Layers, RotateCcw, Bell } from 'lucide-react';
 import { fetchJSON } from '../api';
 import type { SchedulerSettings as SchedulerSettingsType } from '../api';
 import './SchedulerSettings.css';
@@ -191,6 +191,34 @@ export default function SchedulerSettings() {
           </label>
           <p className="sched-field-hint">
             Re-classify articles that have already been processed. Useful after a model update.
+          </p>
+        </div>
+
+        <hr className="sched-divider" />
+
+        <div className="sched-section-title">
+          <Bell size={15} />
+          Notification settings
+        </div>
+
+        <div className="sched-section">
+          <label className="sched-toggle-row">
+            <span className="sched-field-label">
+              Always send cycle summary
+            </span>
+            <input
+              type="checkbox"
+              className="sched-toggle"
+              checked={settings.notify_always}
+              onChange={e => setSettings({ ...settings, notify_always: e.target.checked })}
+            />
+            <span className={`sched-toggle-label ${settings.notify_always ? 'on' : 'off'}`}>
+              {settings.notify_always ? 'On' : 'Off'}
+            </span>
+          </label>
+          <p className="sched-field-hint">
+            When off (default): email is sent only when public consultations are detected.
+            When on: also sends a brief summary email when no consultations were found, showing how many new articles were parsed.
           </p>
         </div>
 

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 
 from api.dependencies import db
-from notifier.sender import ConsultationAlert, send_digest
+from notifier.sender import ConsultationAlert, send_digest, send_summary_email
 from pipeline.runner import run_pipeline
 from scraper.config import ScrapeConfig
 from scraper.crawler import crawl_paginated
@@ -39,6 +39,7 @@ def run_monitor_cycle() -> None:
     # Use classifier settings from the first config that defines them; fall back to defaults.
     pipeline_cfg = configs[0] if configs else None
 
+    total_new_articles = 0
     for cfg in configs:
         session_id = db.create_crawl_session(
             triggered_at=datetime.now(timezone.utc).isoformat(),
@@ -58,6 +59,7 @@ def run_monitor_cycle() -> None:
             )
             db.finish_crawl_session(session_id, summary)
             db.link_articles_to_session(session_id, summary["article_ids"])
+            total_new_articles += summary.get("saved", 0)
             logger.info("Scraped %s: %s", cfg.url, summary)
         except Exception:
             db.fail_crawl_session(session_id, "scrape failed")
@@ -81,6 +83,13 @@ def run_monitor_cycle() -> None:
     unnotified = db.list_unnotified_consultations()
     if not unnotified:
         logger.info("No new consultations to notify")
+        if settings.notify_always:
+            try:
+                send_summary_email(total_new_articles)
+                logger.info("Sent cycle summary: %d new article(s), no consultations",
+                            total_new_articles)
+            except Exception:
+                logger.exception("Failed to send cycle summary email")
         return
 
     alerts = []

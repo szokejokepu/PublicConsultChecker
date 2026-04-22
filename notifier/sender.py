@@ -212,6 +212,57 @@ def build_message(
 # ---------------------------------------------------------------------------
 
 
+def send_summary_email(new_article_count: int, config: NotifierConfig | None = None) -> None:
+    """Send a brief summary email when no public consultations were detected."""
+    if config is None:
+        config = NotifierConfig()
+    config.validate()
+
+    sent_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    subject = "[RAG] Cycle complete — no new public consultations"
+    text = (
+        f"Scheduler cycle complete — {sent_at}\n"
+        f"{'=' * 60}\n"
+        f"{new_article_count} new article(s) parsed.\n"
+        f"No new public consultations detected.\n\n"
+        f"—\nSent by your RAG notification service."
+    )
+    html = f"""<!DOCTYPE html>
+<html>
+<body style="font-family:system-ui,sans-serif;background:#f8fafc;padding:24px;margin:0">
+  <div style="max-width:600px;margin:0 auto;background:white;border-radius:8px;
+              box-shadow:0 1px 3px rgba(0,0,0,0.1);overflow:hidden">
+    <div style="background:#1e293b;color:white;padding:20px 24px">
+      <h1 style="margin:0;font-size:1.2rem">Scheduler Cycle Complete</h1>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:0.9rem">{sent_at}</p>
+    </div>
+    <div style="padding:24px;color:#475569">
+      <p style="margin:0 0 8px"><strong style="color:#1e293b">{new_article_count}</strong> new article(s) parsed.</p>
+      <p style="margin:0;color:#64748b">No new public consultations detected.</p>
+    </div>
+    <div style="padding:16px 24px;background:#f8fafc;border-top:1px solid #e2e8f0;
+                font-size:0.8rem;color:#94a3b8">
+      Sent by your RAG notification service.
+    </div>
+  </div>
+</body>
+</html>"""
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = config.from_addr
+    msg["To"] = config.to_addr
+    msg.attach(MIMEText(text, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
+
+    context = ssl.create_default_context()
+    with smtplib.SMTP(config.smtp_host, config.smtp_port) as server:
+        server.ehlo()
+        server.starttls(context=context)
+        server.login(config.smtp_user, config.smtp_password)
+        server.sendmail(config.from_addr, config.to_addr, msg.as_string())
+
+
 def send_digest(alerts: list[ConsultationAlert], config: NotifierConfig | None = None) -> None:
     """Send a digest email for the given alerts.
 

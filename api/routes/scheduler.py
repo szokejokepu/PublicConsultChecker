@@ -18,6 +18,7 @@ class SchedulerSettingsOut(BaseModel):
     use_keyword_filter: bool
     batch_size: int
     reprocess_all: bool
+    notify_always: bool
 
 
 class SchedulerSettingsIn(BaseModel):
@@ -26,6 +27,7 @@ class SchedulerSettingsIn(BaseModel):
     use_keyword_filter: bool
     batch_size: int = Field(ge=1, le=500)
     reprocess_all: bool
+    notify_always: bool = False
 
 
 @router.get("/scheduler/settings", response_model=SchedulerSettingsOut)
@@ -37,6 +39,7 @@ def get_scheduler_settings():
         use_keyword_filter=s.use_keyword_filter,
         batch_size=s.batch_size,
         reprocess_all=s.reprocess_all,
+        notify_always=s.notify_always
     )
 
 
@@ -48,6 +51,7 @@ def update_scheduler_settings(body: SchedulerSettingsIn):
         use_keyword_filter=body.use_keyword_filter,
         batch_size=body.batch_size,
         reprocess_all=body.reprocess_all,
+        notify_always=body.notify_always,
     )
     db.save_scheduler_settings(s)
     apply_settings()
