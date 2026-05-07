@@ -87,3 +87,4 @@ __pychache__
 # Environment variables
 .env
 trainer/output/*
+/extra_scripts/
