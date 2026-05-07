@@ -1,19 +1,19 @@
-"""Tests for scraper.database using an in-memory SQLite database."""
+"""Tests for SQLiteStorage using an in-memory database."""
 
 from datetime import datetime
 
 import pytest
 
 from pipeline.models import AnalysisResult
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 
 @pytest.fixture
 def db():
-    return ArticleDB(db_path=":memory:")
+    return SQLiteStorage(db_path=":memory:")
 
 
-def _save(db: ArticleDB, **kwargs) -> int:
+def _save(db: SQLiteStorage, **kwargs) -> int:
     defaults = dict(
         url="https://example.com/article",
         title="Test Article",

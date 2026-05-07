@@ -1,4 +1,4 @@
-"""Tests for crawl session tracking in ArticleDB."""
+"""Tests for crawl session tracking in SQLiteStorage."""
 
 from __future__ import annotations
 
@@ -6,19 +6,19 @@ from datetime import datetime, timezone
 
 import pytest
 
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 
 @pytest.fixture
 def db():
-    return ArticleDB(db_path=":memory:")
+    return SQLiteStorage(db_path=":memory:")
 
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _make_article(db: ArticleDB, *, n: int = 1) -> int:
+def _make_article(db: SQLiteStorage, *, n: int = 1) -> int:
     aid = db.save_article(
         url=f"https://example.com/article/{n}",
         title=f"Article {n}",

@@ -6,7 +6,7 @@ import pytest
 
 from scraper.crawler import find_article_links, page_url, crawl_paginated
 from scraper.config import ScrapeConfig
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 BASE_URL = "https://example.com/stiri"
 
@@ -55,7 +55,7 @@ def make_article_html(title: str = "Test Article") -> str:
 
 @pytest.fixture
 def db():
-    return ArticleDB(db_path=":memory:")
+    return SQLiteStorage(db_path=":memory:")
 
 
 # ---------------------------------------------------------------------------
@@ -431,8 +431,8 @@ class TestCrawlPaginated:
             pages[f"https://example.com/article/{i}"] = make_article_html(f"Art {i}")
         pages[f"{BASE_URL}-page2/"] = EMPTY_LISTING_HTML
 
-        db_seq = ArticleDB(db_path=":memory:")
-        db_par = ArticleDB(db_path=":memory:")
+        db_seq = SQLiteStorage(db_path=":memory:")
+        db_par = SQLiteStorage(db_path=":memory:")
 
         with patch("scraper.crawler.fetch_html", side_effect=self._mock_fetch(pages)):
             summary_seq = crawl_paginated(BASE_URL, db_seq, max_workers=1, verbose=False)

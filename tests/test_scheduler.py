@@ -6,11 +6,8 @@ import json
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
 
-import pytest
-
-import api.scheduler  # ensure module is imported before any patch() calls
 from api.scheduler import create_scheduler, run_monitor_cycle
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 from pipeline.models import AnalysisResult
 
 
@@ -18,11 +15,11 @@ from pipeline.models import AnalysisResult
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _make_db() -> ArticleDB:
-    return ArticleDB(db_path=":memory:")
+def _make_db() -> SQLiteStorage:
+    return SQLiteStorage(db_path=":memory:")
 
 
-def _save_consultation(db: ArticleDB, *, article_id_hint: int = 1) -> tuple:
+def _save_consultation(db: SQLiteStorage, *, article_id_hint: int = 1) -> tuple:
     """Save an article + analysis marked as a public consultation."""
     article_id = db.save_article(
         url=f"https://example.com/article/{article_id_hint}",
@@ -272,7 +269,7 @@ class TestCreateScheduler:
     def test_interval_configured_correctly(self, monkeypatch):
         monkeypatch.setenv("SCHEDULER_ENABLED", "true")
         mock_db = _make_db()
-        from scraper.database import SchedulerSettings as SS
+        from scraper.storage.storage import SchedulerSettings as SS
         mock_db.save_scheduler_settings(SS(enabled=True, interval_minutes=30,
                                            use_keyword_filter=True, batch_size=32, reprocess_all=False))
         with patch("api.scheduler.db", mock_db):

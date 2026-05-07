@@ -8,9 +8,9 @@ A pipeline that scrapes Romanian municipal websites, detects public consultation
 **Workflow overview:**
 
 ```
-Scraper → SQLite DB → NLP Pipeline → Email Notifier
-                ↑
-         Trainer (fine-tune BERT classifier)
+Scraper → Storage (SQLite or Postgres) → NLP Pipeline → Email Notifier
+                        ↑
+                Trainer (fine-tune BERT classifier)
 ```
 
 ---
@@ -32,7 +32,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your SMTP credentials (see .env.example for details)
+# Edit .env with your SMTP credentials and storage settings
 ```
 
 Gmail users: generate an **App Password** at [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords) (requires 2-Step Verification).
@@ -70,11 +70,13 @@ docker compose down -v       # WARNING: deletes the database and model cache
 
 ### Data persistence
 
-The SQLite database and HuggingFace model weights are stored in the `rag_data` named volume at `/data` inside the container.
+HuggingFace model weights are stored in the `rag_data` named volume at `/data` inside the container. The database location depends on the backend (see [Storage Backends](#storage-backends) below).
 
 | Variable | Default in container | Purpose |
 |----------|----------------------|---------|
-| `DB_PATH` | `/data/articles.db` | SQLite database location |
+| `STORAGE_BACKEND` | `sqlite` | Storage backend: `sqlite` or `postgres` |
+| `DB_PATH` | `/data/articles.db` | SQLite database file path (sqlite backend) |
+| `DATABASE_URL` | _(unset)_ | Postgres connection string (postgres backend) |
 | `HF_HOME` | `/data/hf_cache` | HuggingFace model cache |
 
 ### Image size
@@ -85,16 +87,42 @@ CPU-only PyTorch is used (~300 MB vs ~2.5 GB for the CUDA build). Total image si
 
 ## Scripts
 
+### Storage Backends
+
+The app supports SQLite (default) and PostgreSQL. Select the backend via the `STORAGE_BACKEND` environment variable.
+
+**SQLite** (default — no setup required):
+```bash
+# Default: articles.db in the project root
+DB_PATH=/path/to/articles.db
+
+# Or pass --db on the CLI (see below)
+```
+
+**PostgreSQL:**
+```bash
+STORAGE_BACKEND=postgres
+DATABASE_URL=postgresql://user:password@host:5432/dbname
+```
+
+The schema is created automatically on first startup. No migration tool is needed for a fresh Postgres install.
+
+> **Full-text search:** SQLite uses FTS5 (virtual table). Postgres uses `plainto_tsquery` with `ts_rank` ordering. Behaviour is equivalent but the query syntax differs slightly — complex SQLite FTS5 operators (e.g. `NEAR`, `^`) are not supported on Postgres.
+
+---
+
 ### Scraper CLI — `main.py`
 
-The main entry point. Scrapes paginated article listings into a local SQLite database and provides query commands.
+The main entry point. Scrapes paginated article listings and provides query commands.
 
 ```
-python main.py [--db PATH] <command>
+python main.py [--backend sqlite|postgres] [--db PATH] [--dsn DSN] <command>
 ```
 
-Global option:
-- `--db PATH` — path to the SQLite database (default: `articles.db`)
+Global options:
+- `--backend` — `sqlite` (default) or `postgres`; overrides `STORAGE_BACKEND` env var
+- `--db PATH` — SQLite database file path (default: `articles.db`); sqlite backend only
+- `--dsn DSN` — Postgres connection string; postgres backend only; overrides `DATABASE_URL` env var
 
 #### Commands
 
@@ -111,8 +139,14 @@ Global option:
 **`scrape`** — crawl a website:
 
 ```bash
-# From URL directly
+# SQLite (default)
 python main.py scrape https://example.com/anunturi
+
+# Postgres via option
+python main.py --backend postgres --dsn postgresql://user:pass@host/db scrape https://example.com/anunturi
+
+# Postgres via env vars
+STORAGE_BACKEND=postgres DATABASE_URL=postgresql://user:pass@host/db python main.py scrape https://example.com/anunturi
 
 # From a JSON config file (see configs/bm.json for an example)
 python main.py scrape --config configs/bm.json
@@ -313,7 +347,8 @@ python -m trainer.compare --skip-cosine   # faster, skips embedding pass
 ├── main.py                  # CLI entry point
 ├── articles.db              # SQLite database (created on first run)
 ├── configs/                 # Example scraper config files
-├── scraper/                 # Web crawler and database layer
+├── scraper/                 # Web crawler and storage layer
+│   └── storage/             # Storage backends (storage.py, storage_sqlite.py, storage_postgres.py)
 ├── pipeline/                # NLP pipeline (keyword filter → BERT classifier → NER)
 ├── api/                     # FastAPI REST API + job queue
 ├── frontend/                # Static HTML frontend

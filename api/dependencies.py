@@ -1,12 +1,18 @@
-"""Shared application dependencies."""
+"""Shared application dependencies — storage backend factory."""
 
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from scraper.database import ArticleDB
+from scraper.storage.storage import StorageBackend
 
-_DEFAULT_DB_PATH = Path(__file__).parent.parent / "articles.db"
-DB_PATH = Path(os.environ.get("DB_PATH", str(_DEFAULT_DB_PATH)))
-db = ArticleDB(db_path=DB_PATH)
+_BACKEND = os.environ.get("STORAGE_BACKEND", "sqlite").lower()
+
+if _BACKEND == "postgres":
+    from scraper.storage.storage_postgres import PostgresStorage
+    db: StorageBackend = PostgresStorage(dsn=os.environ["DATABASE_URL"])
+else:
+    from scraper.storage.storage_sqlite import DB_DEFAULT, SQLiteStorage
+    _db_path = Path(os.environ.get("DB_PATH", str(DB_DEFAULT)))
+    db: StorageBackend = SQLiteStorage(db_path=_db_path)

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -11,7 +10,7 @@ import pytest
 from pipeline.keyword_filter import keyword_filter
 from pipeline.models import AnalysisResult
 from pipeline.normalizer import normalize
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 
 # ---------------------------------------------------------------------------
@@ -119,11 +118,11 @@ def test_ner_subject_heuristic():
 # ---------------------------------------------------------------------------
 
 
-def _make_db() -> ArticleDB:
-    return ArticleDB(db_path=":memory:")
+def _make_db() -> SQLiteStorage:
+    return SQLiteStorage(db_path=":memory:")
 
 
-def _insert_article(db: ArticleDB, url: str = "http://example.com/1") -> int:
+def _insert_article(db: SQLiteStorage, url: str = "http://example.com/1") -> int:
     row_id = db.save_article(url=url, content="test content")
     assert row_id is not None
     return row_id

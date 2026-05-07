@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 from api.dependencies import db
 from api.scheduler import apply_settings
-from scraper.database import SchedulerSettings
+from scraper.storage.storage import SchedulerSettings
 
 router = APIRouter(prefix="/api")
 

@@ -37,7 +37,7 @@ from pathlib import Path
 import click
 import ollama
 
-from scraper.database import ArticleDB
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 _DB_DEFAULT = str(Path(__file__).parent.parent / "articles.db")
 _OUTPUT_DEFAULT = str(Path(__file__).parent / "data" / "labels.jsonl")
@@ -158,7 +158,7 @@ def main(
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    article_db = ArticleDB(db_path=db)
+    article_db = SQLiteStorage(db_path=db)
     total_in_db = article_db.get_stats()["total_articles"]
 
     done_ids = set() if no_resume else _load_done_ids(output_path)

@@ -15,7 +15,7 @@ from .config import (
     DEFAULT_PAGE_SUFFIX,
     DEFAULT_WORKERS,
 )
-from .database import ArticleDB
+from scraper.storage.storage import StorageBackend
 from .extractor import extract_article, fetch_html
 
 # CSS selector that locates article links on a listing page.
@@ -94,7 +94,7 @@ def _fetch_and_extract(link: str, source_url: str) -> dict | None:
 
 def crawl_paginated(
     base_url: str,
-    db: ArticleDB,
+    db: StorageBackend,
     *,
     selector: str = DEFAULT_ARTICLE_LINK_SELECTOR,
     max_pages: int | None = None,

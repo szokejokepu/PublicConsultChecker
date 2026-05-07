@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from scraper.database import ArticleDB
+from scraper.storage.storage import StorageBackend
 
-from .classifier import classify, DEFAULT_MODEL_NAME, DEFAULT_POSITIVE_REFS
+from .classifier import classify, DEFAULT_MODEL_NAME
 from .keyword_filter import keyword_filter
 from .models import AnalysisResult
 from .ner import extract_entities
@@ -15,7 +15,7 @@ from .normalizer import normalize
 
 def process_single(
     article,
-    db: ArticleDB,
+    db: StorageBackend,
     use_keyword_filter: bool = True,
     model_name: str = DEFAULT_MODEL_NAME,
     positive_refs: list[str] | None = None,
@@ -60,7 +60,7 @@ def process_single(
 
 
 def run_pipeline(
-    db: ArticleDB,
+    db: StorageBackend,
     batch_size: int = 32,
     verbose: bool = True,
     use_keyword_filter: bool = True,

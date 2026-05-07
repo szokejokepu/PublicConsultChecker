@@ -10,33 +10,60 @@ from pathlib import Path
 
 import click
 
+import os
+
 from .config import ScrapeConfig, DEFAULT_ARTICLE_LINK_SELECTOR, DEFAULT_WORKERS
 from .crawler import crawl_paginated
-from .database import Article, ArticleDB
+from scraper.storage.storage import Article, StorageBackend
+from scraper.storage.storage_sqlite import SQLiteStorage
 
 _DB_DEFAULT = str(Path(__file__).parent.parent / "articles.db")
 _SNIPPET_WIDTH = 120
 _CONTENT_PREVIEW = 500
 
 
+def _make_storage(backend: str, db_path: str, dsn: str | None) -> StorageBackend:
+    if backend == "postgres":
+        if not dsn:
+            raise click.UsageError(
+                "Postgres backend requires --dsn or DATABASE_URL env var."
+            )
+        from scraper.storage.storage_postgres import PostgresStorage
+        return PostgresStorage(dsn=dsn)
+    return SQLiteStorage(db_path=db_path)
+
+
 # ---------------------------------------------------------------------------
-# Root group — carries --db across all subcommands via context
+# Root group — carries storage backend across all subcommands via context
 # ---------------------------------------------------------------------------
 
 
 @click.group()
 @click.option(
+    "--backend",
+    default=lambda: os.environ.get("STORAGE_BACKEND", "sqlite"),
+    type=click.Choice(["sqlite", "postgres"], case_sensitive=False),
+    show_default="sqlite",
+    help="Storage backend (overrides STORAGE_BACKEND env var).",
+)
+@click.option(
     "--db",
     default=_DB_DEFAULT,
     show_default=True,
     metavar="PATH",
-    help="Path to the SQLite database file.",
+    help="SQLite database file path (sqlite backend only).",
+)
+@click.option(
+    "--dsn",
+    default=lambda: os.environ.get("DATABASE_URL"),
+    metavar="DSN",
+    help="Postgres connection string (postgres backend only, overrides DATABASE_URL env var).",
 )
 @click.pass_context
-def cli(ctx: click.Context, db: str) -> None:
-    """Scrape web articles and query them via SQLite."""
+def cli(ctx: click.Context, backend: str, db: str, dsn: str | None) -> None:
+    """Scrape web articles and query them via the database."""
     ctx.ensure_object(dict)
-    ctx.obj["db"] = ArticleDB(db_path=db)
+    ctx.obj["db"] = _make_storage(backend, db, dsn)
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +119,7 @@ def scrape(
     max_pages = max_pages if max_pages is not None else cfg.max_pages
     workers = workers if workers is not None else (cfg.workers if cfg.workers is not None else DEFAULT_WORKERS)
 
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     click.echo(f"Crawling {url!r}  (selector={selector!r}, max_pages={max_pages or 'unlimited'}, workers={workers})")
     summary = crawl_paginated(
         url, db,
@@ -117,7 +144,7 @@ def scrape(
 @click.pass_context
 def list_cmd(ctx: click.Context, limit: int, offset: int) -> None:
     """List saved articles."""
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     articles = db.list_articles(limit=limit, offset=offset)
     if not articles:
         click.echo("No articles found.")
@@ -131,7 +158,7 @@ def list_cmd(ctx: click.Context, limit: int, offset: int) -> None:
 @click.pass_context
 def show(ctx: click.Context, id: int, full: bool) -> None:
     """Show a single article by ID."""
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     article = db.get_article(id)
     if article is None:
         click.echo(f"No article with id={id}.", err=True)
@@ -145,7 +172,7 @@ def show(ctx: click.Context, id: int, full: bool) -> None:
 @click.pass_context
 def search(ctx: click.Context, query: tuple[str, ...], limit: int) -> None:
     """Full-text search across articles."""
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     articles = db.search_articles(" ".join(query), limit=limit)
     if not articles:
         click.echo("No results.")
@@ -158,7 +185,7 @@ def search(ctx: click.Context, query: tuple[str, ...], limit: int) -> None:
 @click.pass_context
 def delete(ctx: click.Context, id: int) -> None:
     """Delete an article by ID."""
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     if db.delete_article(id):
         click.echo(f"Deleted article #{id}.")
     else:
@@ -174,7 +201,7 @@ def delete(ctx: click.Context, id: int) -> None:
 def process(ctx: click.Context, batch_size: int, quiet: bool, no_keyword_filter: bool) -> None:
     """Run the NLP pipeline on unprocessed articles."""
     from pipeline.runner import run_pipeline
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     summary = run_pipeline(db, batch_size=batch_size, verbose=not quiet, use_keyword_filter=not no_keyword_filter)
     click.echo(
         f"\nDone — processed: {summary['processed']}, "
@@ -187,7 +214,7 @@ def process(ctx: click.Context, batch_size: int, quiet: bool, no_keyword_filter:
 @click.pass_context
 def stats(ctx: click.Context) -> None:
     """Show database statistics."""
-    db: ArticleDB = ctx.obj["db"]
+    db: StorageBackend = ctx.obj["db"]
     s = db.get_stats()
     click.echo(f"Total articles  : {s['total_articles']}")
     click.echo(f"Unique sources  : {s['unique_sources']}")
