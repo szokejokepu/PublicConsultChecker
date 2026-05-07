@@ -6,12 +6,33 @@ services:
     env_file:
       - .env
     environment:
-      DB_PATH: /app/articles.db
+      STORAGE_BACKEND: postgres
+      DATABASE_URL: postgresql://${POSTGRES_USER:-raguser}:${POSTGRES_PASSWORD:-ragpass}@postgres:5432/${POSTGRES_DB:-ragdb}
       HF_HOME: /data/hf_cache
     volumes:
-      - ./articles.db:/app/articles.db   # bind-mount local DB file
-      - hf_cache:/data/hf_cache          # named volume for model cache
+      - hf_cache:/data/hf_cache
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-raguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragpass}
+      POSTGRES_DB: ${POSTGRES_DB:-ragdb}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-raguser} -d ${POSTGRES_DB:-ragdb}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
 volumes:
   hf_cache:
+  pg_data:

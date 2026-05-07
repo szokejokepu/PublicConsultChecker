@@ -70,14 +70,20 @@ docker compose down -v       # WARNING: deletes the database and model cache
 
 ### Data persistence
 
-HuggingFace model weights are stored in the `rag_data` named volume at `/data` inside the container. The database location depends on the backend (see [Storage Backends](#storage-backends) below).
+`docker-compose.yml` runs a Postgres container and wires it to the API automatically. Article data is stored in the `pg_data` named volume; HuggingFace model weights are in `hf_cache`.
 
-| Variable | Default in container | Purpose |
-|----------|----------------------|---------|
-| `STORAGE_BACKEND` | `sqlite` | Storage backend: `sqlite` or `postgres` |
-| `DB_PATH` | `/data/articles.db` | SQLite database file path (sqlite backend) |
-| `DATABASE_URL` | _(unset)_ | Postgres connection string (postgres backend) |
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `POSTGRES_USER` | `raguser` | Postgres username |
+| `POSTGRES_PASSWORD` | `ragpass` | Postgres password — **change this in production** |
+| `POSTGRES_DB` | `ragdb` | Postgres database name |
 | `HF_HOME` | `/data/hf_cache` | HuggingFace model cache |
+
+Override any of these in `.env`. The `DATABASE_URL` is assembled automatically from the three Postgres vars; you do not need to set it manually when using Compose.
+
+```bash
+docker compose down -v   # WARNING: deletes the database AND model cache
+```
 
 ### Image size
 
